@@ -8,6 +8,9 @@ namespace FinCore.Api.Data
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
 
+
+
         public DbSet<User> Users { get; set; }
+        public DbSet<DeviceSession> DeviceSessions { get; set; }
     }
 }
