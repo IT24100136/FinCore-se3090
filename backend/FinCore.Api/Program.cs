@@ -1,5 +1,8 @@
+using System.Text;
 using FinCore.Api.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,10 +20,50 @@ builder.Services.AddCors(options =>
 builder.Services.AddSwaggerGen(); 
 builder.Services.AddControllers();
 
+var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=fincore.db";
+var dbProvider = builder.Configuration["DbProvider"];
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-    
+{
+    if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCase))
+    {
+        options.UseNpgsql(connStr);
+    }
+    else
+    {
+        options.UseSqlite("Data Source=fincore.db");
+    }
+});
+
+// Configure JWT Authentication
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "your-super-secret-key-that-is-long-enough";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "FinCore";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+    };
+});
+
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.EnsureCreated();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -33,6 +76,9 @@ app.UseHttpsRedirection();
 
 // 2. ADD THIS: Apply the CORS policy (Must be placed before MapControllers)
 app.UseCors("AllowFrontend");
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

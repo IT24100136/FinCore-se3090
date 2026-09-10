@@ -4,12 +4,13 @@ namespace FinCore.Api.Models
 {
     public class User
     {
-        public Guid Id { get; set; }
-        public string Name { get; set; }
-        public string Email { get; set; }
-        public string PasswordHash { get; set; }
-        public string Role { get; set; }  // "Customer", "Analyst", or "Admin"
-        public DateTime CreatedAt { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public string Name { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string PasswordHash { get; set; } = string.Empty;
+        public string Role { get; set; } = "Customer";  // "Customer", "Analyst", or "Admin"
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

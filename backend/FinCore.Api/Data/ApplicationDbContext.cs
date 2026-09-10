@@ -12,5 +12,6 @@ namespace FinCore.Api.Data
 
         public DbSet<User> Users { get; set; }
         public DbSet<DeviceSession> DeviceSessions { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
     }
 }
