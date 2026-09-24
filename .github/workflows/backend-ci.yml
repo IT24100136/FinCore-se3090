@@ -14,6 +14,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Check for merge conflict markers
+        run: |
+          if git grep -nE '^(<<<<<<< .+|=======|>>>>>>> .+)$' -- backend/FinCore.Api backend.tests; then
+            echo "Merge conflict markers detected. Resolve conflicts before pushing."
+            exit 1
+          fi
+
       - name: Restore dependencies
         run: dotnet restore backend/FinCore.Api/FinCore.Api.csproj
 
