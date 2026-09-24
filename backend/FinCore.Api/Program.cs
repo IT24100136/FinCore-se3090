@@ -3,6 +3,8 @@ using FinCore.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using FinCore.Api.Services.FraudService;
+using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +21,23 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddSwaggerGen(); 
 builder.Services.AddControllers();
+builder.Services.AddHttpClient<IGeolocationService, GeolocationService>();
+builder.Services.AddScoped<IFraudService, FraudService>();
+builder.Services.AddTransient<Kernel>(sp =>
+{
+    var kernelBuilder = Kernel.CreateBuilder();
+    
+    // Configures the Kernel to use OpenAI. 
+    // It will look for a key in your appsettings.json, or fall back to the placeholder.
+    var apiKey = builder.Configuration["OpenAI:ApiKey"] ?? "YOUR_OPENAI_API_KEY";
+    
+    kernelBuilder.AddOpenAIChatCompletion(
+        modelId: "gpt-4o-mini", // Or whichever model your team is using
+        apiKey: apiKey);
+        
+    return kernelBuilder.Build();
+});
+builder.Services.AddScoped<IAnomalyDetectionAgent, AnomalyDetectionAgent>();
 
 var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=fincore.db";
 var dbProvider = builder.Configuration["DbProvider"];
