@@ -1,5 +1,6 @@
 using System.Text;
 using FinCore.Api.Data;
+using FinCore.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -19,6 +20,22 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddSwaggerGen(); 
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
+
+// Notification service registration (Mock, Brevo, or Twilio based on NotificationSettings:Provider)
+var notificationProvider = builder.Configuration["NotificationSettings:Provider"] ?? "Mock";
+if (string.Equals(notificationProvider, "Brevo", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddScoped<INotificationService, BrevoNotificationService>();
+}
+else if (string.Equals(notificationProvider, "Twilio", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddScoped<INotificationService, TwilioNotificationService>();
+}
+else
+{
+    builder.Services.AddScoped<INotificationService, MockNotificationService>();
+}
 
 var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=fincore.db";
 var dbProvider = builder.Configuration["DbProvider"];

@@ -3,6 +3,7 @@ using System;
 using FinCore.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FinCore.Api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919104338_AddNotificationsTable")]
+    partial class AddNotificationsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -75,27 +78,12 @@ namespace FinCore.Api.Migrations
                     b.ToTable("DeviceSessions");
                 });
 
-<<<<<<< Updated upstream
-            modelBuilder.Entity("FinCore.Api.Models.FraudFlag", b =>
-=======
             modelBuilder.Entity("FinCore.Api.Models.Notification", b =>
->>>>>>> Stashed changes
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-<<<<<<< Updated upstream
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Reasons")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("RiskScore")
-                        .HasColumnType("INTEGER");
-=======
                     b.Property<string>("ErrorDetails")
                         .HasColumnType("TEXT");
 
@@ -113,44 +101,11 @@ namespace FinCore.Api.Migrations
 
                     b.Property<DateTime>("SentAt")
                         .HasColumnType("TEXT");
->>>>>>> Stashed changes
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-<<<<<<< Updated upstream
-                    b.Property<int>("TransactionId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("FraudFlags");
-                });
-
-            modelBuilder.Entity("FinCore.Api.Models.RuleThreshold", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("LastUpdated")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RuleName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("ThresholdValue")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("RuleThresholds");
-=======
                     b.Property<string>("Subject")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -165,7 +120,6 @@ namespace FinCore.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Notifications");
->>>>>>> Stashed changes
                 });
 
             modelBuilder.Entity("FinCore.Api.Models.User", b =>
