@@ -6,8 +6,7 @@ export default function DeviceHistory({ userId }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Ensure your FinCore backend is running on the correct port (e.g., 5007)
-        axios.get(`http://localhost:5007/api/devices/${userId}/sessions`)
+        axios.get(`/api/devices/${userId}/sessions`)
             .then(response => {
                 setSessions(response.data);
                 setLoading(false);

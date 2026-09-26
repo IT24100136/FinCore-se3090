@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api/auth';
-const DEVICES_API_URL = 'http://localhost:5000/api/devices';
+const API_BASE_URL = '/api/auth';
+const DEVICES_API_URL = '/api/devices';
 
 export const getOrGenerateDeviceFingerprint = () => {
   let fp = localStorage.getItem('device_fingerprint');
