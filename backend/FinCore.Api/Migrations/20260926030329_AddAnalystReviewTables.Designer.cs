@@ -3,6 +3,7 @@ using System;
 using FinCore.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FinCore.Api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926030329_AddAnalystReviewTables")]
+    partial class AddAnalystReviewTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -140,61 +143,14 @@ namespace FinCore.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<Guid?>("AssignedAnalystId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Device")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FlagReasonsJson")
-                        .HasColumnType("TEXT");
-
-                    b.Property<double>("Latitude")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("Longitude")
-                        .HasColumnType("REAL");
-
-                    b.Property<string>("OriginIp")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("PriorityLabel")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("QueueCode")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RecipientId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RecipientName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<double>("RiskScore")
-                        .HasColumnType("REAL");
-
-                    b.Property<string>("SenderId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SenderName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -202,9 +158,6 @@ namespace FinCore.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("TransactionId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
