@@ -8,12 +8,12 @@ using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. ADD THIS: Configure the CORS policy to allow your Vite frontend
+// 1. ADD THIS: Configure the CORS policy to allow your Vite frontend (and Flutter Web)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://127.0.0.1:5173", "http://localhost:5173")
+        policy.AllowAnyOrigin()
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
