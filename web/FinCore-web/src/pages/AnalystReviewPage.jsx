@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { reviewService } from '../services/reviewService';
 import TransactionMap from '../components/TransactionMap';
+import RuleConfigurationPanel from '../components/fraud/RuleConfigurationPanel';
+import FraudFlagList from '../components/fraud/FraudFlagList';
+import FlagDetailBreakdown from '../components/fraud/FlagDetailBreakdown';
+import FlaggingTrendsDashboard from '../components/fraud/FlaggingTrendsDashboard';
 import {
     LayoutDashboard,
     Inbox,
@@ -37,6 +41,7 @@ export default function AnalystReviewPage() {
     const [activeTab, setActiveTab] = useState('review-queue'); // 'review-queue' | 'case-detail' | 'analytics' | 'audit-logs'
     const [queue, setQueue] = useState([]);
     const [selectedCase, setSelectedCase] = useState(null);
+    const [selectedFraudFlag, setSelectedFraudFlag] = useState(null);
     const [caseHistory, setCaseHistory] = useState([]);
     const [filterType, setFilterType] = useState('ALL'); // 'ALL' | 'ASSIGNED_TO_ME' | 'CRITICAL' | 'DUAL'
     const [searchQuery, setSearchQuery] = useState('');
@@ -410,25 +415,37 @@ export default function AnalystReviewPage() {
                         <FileCheck2 size={18} /> Audit Trails & History
                     </button>
 
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>MANAGEMENT</div>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>FRAUD ENGINE</div>
 
                     <button
                         onClick={() => setActiveTab('fraud-flags')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: '#94a3b8', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
                     >
-                        <Flag size={18} /> Fraud Flags
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Flag size={18} /> Fraud Flags
+                        </div>
+                        <span style={{ backgroundColor: activeTab === 'fraud-flags' ? '#1d4ed8' : '#dc2626', color: '#fff', fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
+                            LIVE
+                        </span>
                     </button>
 
                     <button
                         onClick={() => setActiveTab('fraud-rules')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: '#94a3b8', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-rules' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-rules' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
                     >
                         <Sliders size={18} /> Fraud Rules
                     </button>
 
                     <button
+                        onClick={() => setActiveTab('fraud-trends')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-trends' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-trends' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                    >
+                        <TrendingUp size={18} /> Flagging Trends
+                    </button>
+
+                    <button
                         onClick={() => setActiveTab('reversals')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: '#94a3b8', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'reversals' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'reversals' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left' }}
                     >
                         <RotateCcw size={18} /> Reversals
                     </button>
@@ -1450,6 +1467,54 @@ export default function AnalystReviewPage() {
                                 </div>
                             </div>
                         </div>
+                    )}
+
+                    {/* ============================================================== */}
+                    {/* TAB: FRAUD FLAGS LIST (Component Deliverable 2)                */}
+                    {/* ============================================================== */}
+                    {activeTab === 'fraud-flags' && (
+                        <FraudFlagList
+                            onSelectFlag={(flag) => {
+                                setSelectedFraudFlag(flag);
+                                setActiveTab('flag-detail');
+                            }}
+                            onOpenTrends={() => setActiveTab('fraud-trends')}
+                            onOpenRules={() => setActiveTab('fraud-rules')}
+                        />
+                    )}
+
+                    {/* ============================================================== */}
+                    {/* TAB: FLAG DETAIL / SCORE BREAKDOWN (Component Deliverable 3)   */}
+                    {/* ============================================================== */}
+                    {activeTab === 'flag-detail' && (
+                        <FlagDetailBreakdown
+                            flag={selectedFraudFlag}
+                            onBack={() => setActiveTab('fraud-flags')}
+                            onDecisionSubmitted={() => {
+                                loadData();
+                            }}
+                        />
+                    )}
+
+                    {/* ============================================================== */}
+                    {/* TAB: RULE CONFIGURATION PANEL (Component Deliverable 1)        */}
+                    {/* ============================================================== */}
+                    {activeTab === 'fraud-rules' && (
+                        <RuleConfigurationPanel
+                            onRuleChanged={() => {
+                                loadData();
+                            }}
+                        />
+                    )}
+
+                    {/* ============================================================== */}
+                    {/* TAB: FLAGGING TRENDS DASHBOARD (Component Deliverable 4)       */}
+                    {/* ============================================================== */}
+                    {activeTab === 'fraud-trends' && (
+                        <FlaggingTrendsDashboard
+                            onNavigateToRules={() => setActiveTab('fraud-rules')}
+                            onNavigateToFlags={() => setActiveTab('fraud-flags')}
+                        />
                     )}
 
                 </div>
