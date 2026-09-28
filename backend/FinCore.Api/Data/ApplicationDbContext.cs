@@ -17,5 +17,8 @@ namespace FinCore.Api.Data
         public DbSet<RuleThreshold> RuleThresholds { get; set; }
         public DbSet<ApprovalDecision> ApprovalDecisions { get; set; }
         public DbSet<ReviewQueue> ReviewQueues { get; set; }
+
+        public DbSet<Wallet> Wallets { get; set; }
+        public DbSet<Transaction> Transactions { get; set; }
     }
 }
