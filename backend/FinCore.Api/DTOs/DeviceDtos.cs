@@ -30,4 +30,11 @@ namespace FinCore.Api.DTOs
         [Required]
         public string Status { get; set; } = "Verified";
     }
+
+    public class DeviceConfirmRequestDto
+    {
+        public int SessionId { get; set; }
+        public int UserId { get; set; }
+        public string DeviceFingerprint { get; set; } = string.Empty;
+    }
 }
