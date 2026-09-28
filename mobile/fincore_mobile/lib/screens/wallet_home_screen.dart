@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/wallet_service.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
 import 'send_money_screen.dart';
 import 'transaction_history_screen.dart';
 
@@ -408,21 +409,29 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Stack(
-                children: [
-                  const Icon(Icons.notifications_outlined,
-                      size: 26, color: Color(0xFF1A2340)),
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                          color: Colors.orange, shape: BoxShape.circle),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  );
+                },
+                child: Stack(
+                  children: [
+                    const Icon(Icons.notifications_outlined,
+                        size: 26, color: Color(0xFF1A2340)),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                            color: Colors.orange, shape: BoxShape.circle),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(width: 12),
               GestureDetector(

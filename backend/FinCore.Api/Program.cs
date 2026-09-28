@@ -9,7 +9,7 @@ using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. ADD THIS: Configure the CORS policy to allow your Vite frontend (and Flutter Web)
+// 1. Configure the CORS policy to allow your Vite frontend (and Flutter Web)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -44,11 +44,19 @@ builder.Services.AddTransient<Kernel>(sp =>
 });
 builder.Services.AddScoped<IAnomalyDetectionAgent, AnomalyDetectionAgent>();
 
-var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Host=localhost;Port=5432;Database=fincore;Username=postgres;Password=postgres";
+var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=fincore.db";
+var dbProvider = builder.Configuration["DbProvider"];
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    options.UseNpgsql(connStr);
+    if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCase))
+    {
+        options.UseNpgsql(connStr);
+    }
+    else
+    {
+        options.UseSqlite("Data Source=fincore.db");
+    }
 });
 
 // Configure JWT Authentication
@@ -90,7 +98,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// 2. ADD THIS: Apply the CORS policy (Must be placed before MapControllers)
+// 2. Apply the CORS policy (Must be placed before MapControllers)
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
@@ -99,3 +107,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

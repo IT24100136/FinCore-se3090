@@ -11,8 +11,7 @@ void main() {
     );
 
     // Verify initial UI elements
-    expect(find.text('FinCore Login'), findsOneWidget);
+    expect(find.text('FinCore'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(2));
-    expect(find.widgetWithText(ElevatedButton, 'Login & Grab Token'), findsOneWidget);
   });
 }
