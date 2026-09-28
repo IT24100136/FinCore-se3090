@@ -1,0 +1,244 @@
+import React, { useState } from 'react';
+import { 
+  Bell, 
+  Mail, 
+  MessageSquare, 
+  CheckCircle2, 
+  XCircle, 
+  Search, 
+  Filter, 
+  RefreshCw, 
+  Send, 
+  Clock, 
+  AlertCircle,
+  Copy,
+  Check
+} from 'lucide-react';
+
+export default function NotificationLogView({ logs, onResendNotification, searchQuery }) {
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [resendingId, setResendingId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+
+  // Filter logs by search, type filter, and status filter
+  const filteredLogs = logs.filter((log) => {
+    const matchesSearch =
+      log.recipient.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.recipientName && log.recipientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesType = typeFilter === 'All' || log.type === typeFilter;
+    const matchesStatus = statusFilter === 'All' || log.deliveryStatus === statusFilter;
+
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  const handleResend = (logId) => {
+    setResendingId(logId);
+    setTimeout(() => {
+      onResendNotification(logId);
+      setResendingId(null);
+    }, 800);
+  };
+
+  const copyToClipboard = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* View Title & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight font-sans">
+            Notification Log Viewer
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Audit system communications, SMS OTP deliveries, and transactional email logs.
+          </p>
+        </div>
+
+        {/* Filter Controls */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Type Filter */}
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-xs text-slate-500 font-medium">Channel:</span>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Channels</option>
+              <option value="Email">Email Only</option>
+              <option value="SMS">SMS Only</option>
+            </select>
+          </div>
+
+          {/* Delivery Status Filter */}
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-xs text-slate-500 font-medium">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Statuses</option>
+              <option value="Sent">Sent (Success)</option>
+              <option value="Failed">Failed (Error)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Clean White Card Data Table */}
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <th className="py-3.5 px-6">Recipient</th>
+                <th className="py-3.5 px-6">Type</th>
+                <th className="py-3.5 px-6">Message Snippet</th>
+                <th className="py-3.5 px-6">Delivery Status</th>
+                <th className="py-3.5 px-6">Timestamp</th>
+                <th className="py-3.5 px-6 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <Bell className="w-8 h-8 mx-auto mb-2 opacity-50 text-slate-400" />
+                    <p className="text-sm font-medium">No notification logs match your filter criteria.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredLogs.map((log) => {
+                  const isSent = log.deliveryStatus === 'Sent';
+                  return (
+                    <tr
+                      key={log.id}
+                      className={`hover:bg-slate-50/70 transition-colors ${
+                        !isSent ? 'bg-rose-50/20' : ''
+                      }`}
+                    >
+                      {/* Recipient Column */}
+                      <td className="py-4 px-6">
+                        <div>
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>{log.recipient}</span>
+                            <button
+                              onClick={() => copyToClipboard(log.recipient, log.id)}
+                              className="text-slate-400 hover:text-blue-600 transition-colors"
+                              title="Copy Recipient"
+                            >
+                              {copiedId === log.id ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                          {log.recipientName && (
+                            <div className="text-[11px] text-slate-400">
+                              User: {log.recipientName}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Type Column (SMS or Email Badge) */}
+                      <td className="py-4 px-6">
+                        {log.type === 'Email' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                            Email
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+                            <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+                            SMS
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Message Snippet Column */}
+                      <td className="py-4 px-6 max-w-xs md:max-w-md">
+                        <p className="text-slate-700 truncate font-sans text-xs leading-relaxed" title={log.message}>
+                          {log.message}
+                        </p>
+                        {log.channelDetails && (
+                          <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">
+                            {log.channelDetails}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Delivery Status Column (Green for Sent, Red for Failed) */}
+                      <td className="py-4 px-6">
+                        {isSent ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            Sent
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 shadow-sm">
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            Failed
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Timestamp Column */}
+                      <td className="py-4 px-6 text-slate-600 font-medium whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{log.timestamp}</span>
+                        </div>
+                      </td>
+
+                      {/* Actions Column (Resend Button for Failed) */}
+                      <td className="py-4 px-6 text-right">
+                        {!isSent ? (
+                          <button
+                            onClick={() => handleResend(log.id)}
+                            disabled={resendingId === log.id}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors shadow-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${resendingId === log.id ? 'animate-spin' : ''}`} />
+                            <span>{resendingId === log.id ? 'Sending...' : 'Resend'}</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {log.latencyMs}ms
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer Summary */}
+        <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
+          <span>Showing {filteredLogs.length} of {logs.length} logged dispatches</span>
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5 text-emerald-700 font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Sent: {logs.filter(l => l.deliveryStatus === 'Sent').length}
+            </span>
+            <span className="flex items-center gap-1.5 text-rose-700 font-bold">
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span> Failed: {logs.filter(l => l.deliveryStatus === 'Failed').length}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
