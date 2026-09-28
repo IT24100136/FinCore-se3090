@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using FinCore.Api.Services.FraudService;
+using FinCore.Api.Services.NotificationService;
 using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<IGeolocationService, GeolocationService>();
 builder.Services.AddScoped<IFraudService, FraudService>();
+builder.Services.AddScoped<INotificationService, MockNotificationService>();
+builder.Services.AddScoped<BrevoNotificationService>();
+builder.Services.AddScoped<TwilioNotificationService>();
+builder.Services.AddScoped<MockNotificationService>();
 builder.Services.AddTransient<Kernel>(sp =>
 {
     var kernelBuilder = Kernel.CreateBuilder();
