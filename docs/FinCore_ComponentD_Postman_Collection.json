@@ -1,0 +1,400 @@
+{
+  "info": {
+    "_postman_id": "c8e6d1a2-9b4f-4f7e-a891-23456789abcd",
+    "name": "FinCore Component D (Identity, Device Trust & Notifications) E2E Test Suite",
+    "description": "Postman Collection v2.1.0 for testing FinCore Component D cross-platform integration including Auth, Device Trust Verification, Device Confirmation, Notification Telemetry, and Admin Analytics.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Auth - Register Test User",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"User created successfully\", function () {",
+              "    pm.expect(jsonData.message).to.include(\"registered successfully\");",
+              "    pm.expect(jsonData).to.have.property(\"userId\");",
+              "});",
+              "",
+              "if (jsonData.userId) {",
+              "    pm.environment.set(\"userId\", jsonData.userId);",
+              "    console.log(\"Saved userId to environment:\", jsonData.userId);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"name\": \"QA Test Customer\",\n  \"role\": \"Customer\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Auth - Login and Save JWT",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Response contains JWT Token\", function () {",
+              "    pm.expect(jsonData).to.have.property(\"token\");",
+              "    pm.expect(jsonData.token).to.be.a(\"string\").that.is.not.empty;",
+              "});",
+              "",
+              "pm.environment.set(\"jwt_token\", jsonData.token);",
+              "console.log(\"Saved jwt_token to environment:\", jsonData.token.substring(0, 20) + \"...\");"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Device Trust - Simulate Unrecognized Device Attempt",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Device intercepted as new and set to Unverified\", function () {",
+              "    pm.expect(jsonData.status).to.eql(\"Unverified\");",
+              "    pm.expect(jsonData.isNewDevice).to.eql(true);",
+              "    pm.expect(jsonData).to.have.property(\"sessionId\");",
+              "});",
+              "",
+              "pm.environment.set(\"sessionId\", jsonData.sessionId);",
+              "pm.environment.set(\"deviceFingerprint\", jsonData.deviceFingerprint);",
+              "console.log(\"Saved sessionId: \" + jsonData.sessionId + \", deviceFingerprint: \" + jsonData.deviceFingerprint);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{userId}},\n  \"deviceFingerprint\": \"{{simulated_fingerprint}}\",\n  \"ipAddress\": \"192.168.1.150\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/devices/verify",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices",
+            "verify"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Device Trust - Confirm Device Session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Device session status upgraded to Verified\", function () {",
+              "    pm.expect(jsonData.status).to.eql(\"Verified\");",
+              "    pm.expect(jsonData.message).to.include(\"upgraded from Unverified to Verified\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": {{sessionId}},\n  \"userId\": {{userId}},\n  \"deviceFingerprint\": \"{{deviceFingerprint}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/devices/confirm",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices",
+            "confirm"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Device Trust - Verify Session Status Upgrade",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Sessions list returns array\", function () {",
+              "    pm.expect(jsonData).to.be.an(\"array\");",
+              "});",
+              "",
+              "pm.test(\"Target session exists and reflects Verified status\", function () {",
+              "    var targetSession = jsonData.find(function(s) {",
+              "        return s.id === parseInt(pm.environment.get(\"sessionId\")) || s.deviceFingerprint === pm.environment.get(\"deviceFingerprint\");",
+              "    });",
+              "    pm.expect(targetSession, \"Target session not found in user sessions\").to.not.be.undefined;",
+              "    pm.expect(targetSession.status).to.eql(\"Verified\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/devices/{{userId}}/sessions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices",
+            "{{userId}}",
+            "sessions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "6. Notifications - Fetch User Alert Logs",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Notifications endpoint returns list\", function () {",
+              "    pm.expect(jsonData).to.be.an(\"array\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/notifications/{{userId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "notifications",
+            "{{userId}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Analytics - Fetch Admin Device Metrics Summary",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Summary metrics contains delivery success rate and device telemetry\", function () {",
+              "    pm.expect(jsonData).to.have.property(\"deliverySuccessRate\");",
+              "    pm.expect(jsonData).to.have.property(\"telemetry\");",
+              "    pm.expect(jsonData.telemetry).to.have.property(\"totalDevices\");",
+              "    pm.expect(jsonData.telemetry).to.have.property(\"verifiedDevices\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/devices/analytics/summary",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "devices",
+            "analytics",
+            "summary"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "user_email",
+      "value": "qa.demo.customer@fincore.com",
+      "type": "string"
+    },
+    {
+      "key": "user_password",
+      "value": "DemoPassword123!",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "simulated_fingerprint",
+      "value": "fp-android-emulator-pixel7-9812a3",
+      "type": "string"
+    },
+    {
+      "key": "deviceFingerprint",
+      "value": "fp-android-emulator-pixel7-9812a3",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "1",
+      "type": "string"
+    }
+  ]
+}
