@@ -44,19 +44,11 @@ builder.Services.AddTransient<Kernel>(sp =>
 });
 builder.Services.AddScoped<IAnomalyDetectionAgent, AnomalyDetectionAgent>();
 
-var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=fincore.db";
-var dbProvider = builder.Configuration["DbProvider"];
+var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Host=localhost;Port=5432;Database=fincore;Username=postgres;Password=postgres";
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCase))
-    {
-        options.UseNpgsql(connStr);
-    }
-    else
-    {
-        options.UseSqlite("Data Source=fincore.db");
-    }
+    options.UseNpgsql(connStr);
 });
 
 // Configure JWT Authentication
