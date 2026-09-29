@@ -243,7 +243,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   /// Async function using http package to call PUT /api/devices/confirm
   /// Includes jwt_token from flutter_secure_storage in Authorization header.
-  Future<void> _confirmDeviceApi(NotificationItem item, {BuildContext? dialogContext}) async {
+  Future<void> _confirmDeviceApi(NotificationItem item) async {
     if (mounted) {
       setState(() {
         item.isVerified = true;

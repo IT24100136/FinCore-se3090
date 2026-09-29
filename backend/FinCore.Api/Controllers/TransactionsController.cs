@@ -194,6 +194,82 @@ namespace FinCore.Api.Controllers
             });
         }
 
+        // ── GET /api/transactions/all ────────────────────────────────────────
+        // Admin-only: get all transactions system-wide
+        [HttpGet("all")]
+        [Authorize(Roles = "Admin")]
+        public IActionResult GetAllTransactions(
+            [FromQuery] string? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+            var query = _context.Transactions.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status) && !status.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                if (status.Equals("Held", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(t => t.Status.ToLower() == "held" || t.Status.ToLower() == "pending");
+                }
+                else
+                {
+                    query = query.Where(t => t.Status.ToLower() == status.ToLower());
+                }
+            }
+
+            var total = query.Count();
+
+            var data = query
+                .OrderByDescending(t => t.Timestamp)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(t => new
+                {
+                    id = t.ReferenceId, // Using ReferenceId as the ID for the frontend display
+                    dbId = t.Id,
+                    sender = t.SenderWalletId.ToString(), // In a real app, join with Users/Wallets to get names
+                    receiver = t.ReceiverWalletId.HasValue ? t.ReceiverWalletId.ToString() : "N/A",
+                    amount = t.Amount,
+                    status = t.Status,
+                    timestamp = t.Timestamp,
+                    riskScore = 0 // Mock risk score, in a real app this would come from ReviewQueue
+                })
+                .ToList();
+
+            // Fetch risk scores from ReviewQueue to enrich the data
+            var referenceIds = data.Select(d => d.id).ToList();
+            var reviewItems = _context.ReviewQueues
+                .Where(rq => referenceIds.Contains(rq.QueueCode))
+                .ToList();
+
+            var enrichedData = data.Select(d => {
+                var review = reviewItems.FirstOrDefault(r => r.QueueCode == d.id);
+                return new {
+                    d.id,
+                    d.dbId,
+                    sender = review?.SenderName ?? $"Wallet {d.sender}",
+                    receiver = review?.RecipientName ?? (d.receiver != "N/A" ? $"Wallet {d.receiver}" : "N/A"),
+                    d.amount,
+                    d.status,
+                    d.timestamp,
+                    riskScore = review?.RiskScore ?? 0
+                };
+            });
+
+            return Ok(new
+            {
+                data = enrichedData,
+                total,
+                page,
+                pageSize,
+                totalPages = (int)Math.Ceiling(total / (double)pageSize)
+            });
+        }
+
+
         // ── GET /api/transactions/{id}/status ─────────────────────────────────
         [HttpGet("{id}/status")]
         public IActionResult GetStatus(int id)
