@@ -20,7 +20,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddSwaggerGen(); 
+builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<IGeolocationService, GeolocationService>();
 builder.Services.AddScoped<IFraudService, FraudService>();

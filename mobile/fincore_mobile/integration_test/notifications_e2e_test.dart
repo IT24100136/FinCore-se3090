@@ -6,8 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:fincore_mobile/screens/notifications_screen.dart';
-import 'package:fincore_mobile/screens/wallet_home_screen.dart';
-import 'package:fincore_mobile/widgets/notification_card.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
