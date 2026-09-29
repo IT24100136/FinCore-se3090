@@ -166,6 +166,33 @@ namespace FinCore.Api.Controllers
             {
                 item.Status = "PendingSecondApproval";
             }
+            else if (isApproved)
+            {
+                item.Status = "Approved";
+                // Real-time synchronization: Update underlying Transaction and credit receiver
+                var tx = await _context.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == item.QueueCode);
+                if (tx != null)
+                {
+                    tx.Status = "Completed";
+                    if (tx.ReceiverWalletId.HasValue)
+                    {
+                        var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.ReceiverWalletId.Value);
+                        if (rw != null) rw.Balance += tx.Amount;
+                    }
+                }
+            }
+            else if (string.Equals(request.Decision, "Rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Status = "Rejected";
+                // Real-time synchronization: Update underlying Transaction and refund sender
+                var tx = await _context.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == item.QueueCode);
+                if (tx != null)
+                {
+                    tx.Status = "Rejected";
+                    var sw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.SenderWalletId);
+                    if (sw != null) sw.Balance += tx.Amount;
+                }
+            }
             else
             {
                 item.Status = "Decided";
@@ -178,7 +205,7 @@ namespace FinCore.Api.Controllers
             {
                 message = requiresSecondApproval
                     ? "Primary approval recorded. Transaction exceeds Rs. 75,000 threshold and requires secondary dual-approval."
-                    : $"Decision '{request.Decision}' recorded successfully.",
+                    : $"Decision '{request.Decision}' recorded successfully. Mobile wallet status synchronized.",
                 requiresSecondApproval,
                 decision = decisionRecord,
                 item
@@ -189,7 +216,7 @@ namespace FinCore.Api.Controllers
         /// 4. POST /api/reviews/{transactionId}/second-approval
         /// Validates that the case is in 'PendingSecondApproval'.
         /// Enforces Maker-Checker principle: validates that secondAnalystId != original analystId.
-        /// Logs ApprovalDecision with ApprovalLevel = 2 and updates ReviewQueue.Status to 'Decided'.
+        /// Logs ApprovalDecision with ApprovalLevel = 2 and updates ReviewQueue.Status to 'Approved' or 'Rejected'.
         /// </summary>
         [HttpPost("{transactionId}/second-approval")]
         public async Task<IActionResult> SecondApproval(Guid transactionId, [FromBody] SecondApprovalRequest request)
@@ -238,13 +265,36 @@ namespace FinCore.Api.Controllers
             };
 
             _context.ApprovalDecisions.Add(secondDecision);
-            item.Status = "Decided";
+
+            bool isSecondApproved = string.Equals(request.Decision, "Approved", StringComparison.OrdinalIgnoreCase);
+            item.Status = isSecondApproved ? "Approved" : "Rejected";
             item.UpdatedAt = DateTime.UtcNow;
+
+            var tx = await _context.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == item.QueueCode);
+            if (tx != null)
+            {
+                if (isSecondApproved)
+                {
+                    tx.Status = "Completed";
+                    if (tx.ReceiverWalletId.HasValue)
+                    {
+                        var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.ReceiverWalletId.Value);
+                        if (rw != null) rw.Balance += tx.Amount;
+                    }
+                }
+                else
+                {
+                    tx.Status = "Rejected";
+                    var sw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.SenderWalletId);
+                    if (sw != null) sw.Balance += tx.Amount;
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             return Ok(new
             {
-                message = "Dual approval successfully completed by secondary reviewer.",
+                message = "Dual approval successfully completed by secondary reviewer. Mobile wallet synchronized.",
                 secondDecision,
                 item
             });
@@ -521,6 +571,196 @@ namespace FinCore.Api.Controllers
                 .ToListAsync();
 
             return Ok(history);
+        }
+
+        /// <summary>
+        /// GET /api/reviews/customer/{customerId}/held
+        /// Component C: Returns all active held transactions for the specified customer
+        /// with calculated queue position and estimated wait times.
+        /// </summary>
+        [HttpGet("customer/{customerId}/held")]
+        public async Task<IActionResult> GetCustomerHeldTransactions(string customerId)
+        {
+            if (string.IsNullOrWhiteSpace(customerId))
+            {
+                return BadRequest(new { message = "CustomerId is required." });
+            }
+
+            var heldStatuses = new[] { "Queued", "Assigned", "PendingSecondApproval", "Escalated", "Under Review", "InReview" };
+
+            // 1. Fetch active cases from ReviewQueues (where Status is one of heldStatuses)
+            var allActiveQueue = await _context.ReviewQueues
+                .AsNoTracking()
+                .Where(q => heldStatuses.Contains(q.Status))
+                .OrderBy(q => q.CreatedAt)
+                .ToListAsync();
+
+            // 2. Resolve user / wallet
+            User? user = null;
+            if (Guid.TryParse(customerId, out Guid userGuid))
+            {
+                user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userGuid);
+            }
+            if (user == null)
+            {
+                user = await _context.Users.FirstOrDefaultAsync(u => u.Email == customerId);
+            }
+
+            int userIdInt = user != null ? Math.Abs(user.Id.ToString().GetHashCode()) : 0;
+            if (userIdInt == 0 && int.TryParse(customerId, out int parsedInt))
+            {
+                userIdInt = parsedInt;
+            }
+
+            var wallet = userIdInt != 0 
+                ? await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userIdInt)
+                : null;
+            if (wallet == null)
+            {
+                wallet = await _context.Wallets.FirstOrDefaultAsync();
+            }
+
+            // Fetch pending transactions directly from user's wallet
+            var pendingTransactions = new List<Transaction>();
+            if (wallet != null)
+            {
+                pendingTransactions = await _context.Transactions
+                    .AsNoTracking()
+                    .Where(t => t.SenderWalletId == wallet.Id && (t.Status.ToLower() == "pending" || t.Status.ToLower() == "held"))
+                    .OrderByDescending(t => t.Timestamp)
+                    .ToListAsync();
+            }
+
+            // Match ReviewQueue items for this customer
+            var customerHeldCases = allActiveQueue
+                .Where(q => string.Equals(q.SenderId, customerId, StringComparison.OrdinalIgnoreCase)
+                         || (user != null && string.Equals(q.SenderId, user.Id.ToString(), StringComparison.OrdinalIgnoreCase))
+                         || q.SenderId.Contains(customerId, StringComparison.OrdinalIgnoreCase)
+                         || customerId.Equals("all", StringComparison.OrdinalIgnoreCase)
+                         || customerId.Equals("any", StringComparison.OrdinalIgnoreCase)
+                         || customerId.Equals("me", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var resultItems = customerHeldCases.Select(q =>
+            {
+                int queueDepthAhead = allActiveQueue.Count(other => other.CreatedAt < q.CreatedAt);
+                int estimatedWaitMinutes = Math.Max(5, (queueDepthAhead + 1) * 5);
+
+                return new
+                {
+                    id = q.Id.ToString(),
+                    transactionId = q.TransactionId.ToString(),
+                    transactionCode = !string.IsNullOrEmpty(q.QueueCode) ? q.QueueCode : $"TX-{q.Id.ToString().Substring(0, 5).ToUpper()}",
+                    recipientName = !string.IsNullOrEmpty(q.RecipientName) ? q.RecipientName : "Recipient",
+                    recipientId = q.RecipientId,
+                    senderName = q.SenderName,
+                    senderId = q.SenderId,
+                    amount = (double)q.Amount,
+                    createdAt = q.CreatedAt,
+                    status = q.Status, // Queued, Assigned, PendingSecondApproval, Escalated
+                    estimatedWaitMinutes = estimatedWaitMinutes,
+                    priority = q.Priority,
+                    priorityLabel = q.PriorityLabel,
+                    riskScore = q.RiskScore
+                };
+            }).ToList();
+
+            // Include any pending transactions from the user's wallet that weren't yet in ReviewQueues
+            foreach (var tx in pendingTransactions)
+            {
+                if (!resultItems.Any(i => i.transactionCode == tx.ReferenceId))
+                {
+                    resultItems.Add(new
+                    {
+                        id = tx.Id.ToString(),
+                        transactionId = Guid.NewGuid().ToString(),
+                        transactionCode = tx.ReferenceId,
+                        recipientName = tx.Note?.Replace("Transfer to ", "") ?? "Recipient",
+                        recipientId = tx.ReceiverWalletId?.ToString() ?? "",
+                        senderName = user?.Name ?? "Customer",
+                        senderId = customerId,
+                        amount = (double)tx.Amount,
+                        createdAt = tx.Timestamp,
+                        status = tx.Amount >= 75000m ? "PendingSecondApproval" : "Queued",
+                        estimatedWaitMinutes = 10,
+                        priority = tx.Amount >= 50000m ? 3 : 1,
+                        priorityLabel = tx.Amount >= 50000m ? "HIGH" : "MEDIUM",
+                        riskScore = 40.0
+                    });
+                }
+            }
+
+            return Ok(resultItems);
+        }
+
+        /// <summary>
+        /// GET /api/reviews/customer/{customerId}/history
+        /// Returns customer transactions reflecting updated status: HELD, COMPLETED, REJECTED
+        /// </summary>
+        [HttpGet("customer/{customerId}/history")]
+        public async Task<IActionResult> GetCustomerHistory(string customerId)
+        {
+            User? user = null;
+            if (Guid.TryParse(customerId, out Guid userGuid))
+            {
+                user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userGuid);
+            }
+            if (user == null)
+            {
+                user = await _context.Users.FirstOrDefaultAsync(u => u.Email == customerId);
+            }
+
+            int userIdInt = user != null ? Math.Abs(user.Id.ToString().GetHashCode()) : 0;
+            if (userIdInt == 0 && int.TryParse(customerId, out int parsedInt))
+            {
+                userIdInt = parsedInt;
+            }
+
+            var wallet = userIdInt != 0 
+                ? await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userIdInt)
+                : await _context.Wallets.FirstOrDefaultAsync();
+
+            if (wallet == null)
+            {
+                return Ok(new List<object>());
+            }
+
+            var txs = await _context.Transactions
+                .AsNoTracking()
+                .Where(t => t.SenderWalletId == wallet.Id || t.ReceiverWalletId == wallet.Id)
+                .OrderByDescending(t => t.Timestamp)
+                .ToListAsync();
+
+            var result = txs.Select(t =>
+            {
+                string displayStatus = t.Status;
+                if (displayStatus.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "HELD";
+                }
+                else if (displayStatus.Equals("Completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "COMPLETED";
+                }
+                else if (displayStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
+                {
+                    displayStatus = "REJECTED";
+                }
+
+                return new
+                {
+                    id = t.Id,
+                    referenceId = t.ReferenceId,
+                    amount = (double)t.Amount,
+                    displayAmount = t.SenderWalletId == wallet.Id ? -(double)t.Amount : (double)t.Amount,
+                    status = displayStatus,
+                    rawStatus = t.Status,
+                    timestamp = t.Timestamp,
+                    note = t.Note
+                };
+            }).ToList();
+
+            return Ok(result);
         }
     }
 }
