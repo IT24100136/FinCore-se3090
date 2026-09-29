@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/wallet_service.dart';
+import '../services/held_transaction_service.dart';
 import 'transaction_status_screen.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
@@ -12,6 +13,7 @@ class TransactionHistoryScreen extends StatefulWidget {
 
 class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   final WalletService _service = WalletService();
+  final HeldTransactionService _heldService = HeldTransactionService();
   final ScrollController _scrollController = ScrollController();
 
   // --- Data ---
@@ -32,7 +34,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   static const int _pageSize = 15;
 
   final List<String> _statuses = [
-    'All', 'Pending', 'Held', 'Completed', 'Rejected', 'Reversed'
+    'All', 'Held', 'Pending', 'Completed', 'Rejected', 'Reversed'
   ];
 
   @override
@@ -65,6 +67,38 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       _transactions = [];
     }
     setState(() => _isLoading = true);
+
+    // If 'Held' tab is chosen, query Component C Held Endpoint with estimated wait times
+    if (_selectedStatus == 'Held') {
+      try {
+        final heldItems = await _heldService.getHeldTransactions();
+        final mapped = heldItems.map((h) => {
+          'id': h.id,
+          'transactionId': h.transactionId,
+          'referenceId': h.transactionCode,
+          'amount': h.amount,
+          'displayAmount': -h.amount,
+          'status': 'Held',
+          'timestamp': h.createdAt.toIso8601String(),
+          'note': 'Transfer to ${h.recipientName}',
+          'estimatedWaitMinutes': h.estimatedWaitMinutes,
+          'priorityLabel': h.priorityLabel,
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _transactions = mapped;
+            _total = mapped.length;
+            _totalPages = 1;
+            _isLoading = false;
+          });
+        }
+        return;
+      } catch (e) {
+        debugPrint('Error loading held transactions: $e');
+      }
+    }
+
     try {
       final result = await _service.getHistory(
         status: _selectedStatus == 'All' ? null : _selectedStatus,
@@ -361,6 +395,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     final double amount = (tx['displayAmount'] as num).toDouble();
     final bool isCredit = amount > 0;
     final String status = (tx['status'] ?? '').toString();
+    final bool isHeld =
+        status.toLowerCase() == 'held' || status.toLowerCase() == 'pending';
+    final int waitMinutes = (tx['estimatedWaitMinutes'] as num?)?.toInt() ?? 10;
     final DateTime timestamp = DateTime.tryParse(tx['timestamp'] ?? '') ??
         DateTime.now();
 
@@ -383,17 +420,41 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => TransactionStatusScreen(
-              referenceId: tx['referenceId'] ?? '',
-              amount: amount.abs(),
-              recipient: tx['note'] ?? '',
-              status: status,
+        if (isHeld) {
+          final transactionId =
+              tx['transactionId'] ?? tx['id']?.toString() ?? '';
+          final code = tx['referenceId'] ?? 'TX-UNKNOWN';
+          try {
+            Navigator.pushNamed(
+              context,
+              '/transaction-flag-explanation',
+              arguments: {
+                'transactionId': transactionId,
+                'code': code,
+                'transactionCode': code,
+                'amount': amount.abs(),
+                'status': status,
+              },
+            ).catchError((_) {
+              _showExplanationFallback(code);
+              return null;
+            });
+          } catch (_) {
+            _showExplanationFallback(code);
+          }
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TransactionStatusScreen(
+                referenceId: tx['referenceId'] ?? '',
+                amount: amount.abs(),
+                recipient: tx['note'] ?? '',
+                status: status,
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
@@ -419,8 +480,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                status.toLowerCase() == 'held' ||
-                        status.toLowerCase() == 'pending'
+                isHeld
                     ? Icons.pause_rounded
                     : isCredit
                         ? Icons.arrow_downward_rounded
@@ -469,23 +529,91 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                        color: statusColor,
+                if (isHeld)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                          color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Text(
+                      'HELD • In Analyst Queue (Est. ~${waitMinutes}m)',
+                      style: const TextStyle(
+                        color: Color(0xFFB45309),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 0.4),
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      status.toUpperCase(),
+                      style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.4),
+                    ),
                   ),
-                ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showExplanationFallback(String code) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFF3B6FE8), width: 1.2),
+        ),
+        margin: const EdgeInsets.all(16),
+        content: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                color: Color(0xFF3B6FE8), size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Navigating to Student 2's Flag Explanation Screen",
+                    style: TextStyle(
+                      color: Color(0xFF1A2340),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Passing $code to Explainability module",
+                    style: const TextStyle(
+                      color: Color(0xFF8A94A6),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

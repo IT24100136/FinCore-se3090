@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { reviewService } from '../services/reviewService';
 import TransactionMap from '../components/TransactionMap';
 import RuleConfigurationPanel from '../components/fraud/RuleConfigurationPanel';
@@ -92,7 +93,9 @@ export default function AnalystReviewPage() {
         const priorityLabel = item.priorityLabel || (item.priority === 3 ? 'CRITICAL' : item.priority === 2 ? 'HIGH' : 'MEDIUM');
         const queueCode = item.queueCode || `Q-${104 - idx}`;
         const txIdStr = item.transactionId ? String(item.transactionId) : '';
-        const txCode = txIdStr.length > 8 ? `TX-${txIdStr.substring(0, 8).toUpperCase()}` : (txIdStr || `TX-8829${1 - idx}`);
+        const txCode = (item.queueCode && item.queueCode.startsWith('TRX'))
+            ? item.queueCode
+            : (txIdStr.length > 8 ? `TX-${txIdStr.substring(0, 8).toUpperCase()}` : (txIdStr || `TX-8829${1 - idx}`));
         const isAssignedToMe = item.assignedAnalystId === currentAnalystId;
 
         return {
@@ -363,8 +366,48 @@ export default function AnalystReviewPage() {
                 </div>
 
                 {/* Navigation Items */}
-                <nav style={{ padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', padding: '0 12px 8px', letterSpacing: '0.6px' }}>PLATFORM</div>
+                <nav style={{ padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto' }}>
+                    
+                    {/* 1. FRAUD DETECTION (Engine) */}
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '0 12px 8px', letterSpacing: '0.6px' }}>
+                        FRAUD DETECTION (Engine)
+                    </div>
+
+                    <button
+                        onClick={() => setActiveTab('fraud-flags')}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Flag size={18} /> Fraud Flags
+                        </div>
+                        <span style={{ backgroundColor: activeTab === 'fraud-flags' ? '#1d4ed8' : '#dc2626', color: '#fff', fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
+                            LIVE
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab('fraud-rules')}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-rules' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-rules' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Sliders size={18} /> Fraud Rules
+                        </div>
+                        <span style={{ fontSize: '10px', color: activeTab === 'fraud-rules' ? '#bfdbfe' : '#64748b', fontWeight: 600, backgroundColor: activeTab === 'fraud-rules' ? '#1d4ed8' : '#1e293b', padding: '1px 6px', borderRadius: '6px' }}>
+                            Thresholds
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab('fraud-trends')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-trends' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-trends' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                    >
+                        <TrendingUp size={18} /> Flagging Trends
+                    </button>
+
+                    {/* 2. ANALYST REVIEW (Operations) */}
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>
+                        ANALYST REVIEW (Operations)
+                    </div>
 
                     <button
                         onClick={() => setActiveTab('review-queue')}
@@ -415,39 +458,23 @@ export default function AnalystReviewPage() {
                         <FileCheck2 size={18} /> Audit Trails & History
                     </button>
 
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>FRAUD ENGINE</div>
+                    {/* 3. FINANCIAL CORE (Ledger & Admin - S1) */}
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>
+                        FINANCIAL CORE (Ledger & Admin - S1)
+                    </div>
 
                     <button
-                        onClick={() => setActiveTab('fraud-flags')}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        onClick={() => setActiveTab('transaction-monitor')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'transaction-monitor' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'transaction-monitor' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Flag size={18} /> Fraud Flags
-                        </div>
-                        <span style={{ backgroundColor: activeTab === 'fraud-flags' ? '#1d4ed8' : '#dc2626', color: '#fff', fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
-                            LIVE
-                        </span>
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('fraud-rules')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-rules' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-rules' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
-                    >
-                        <Sliders size={18} /> Fraud Rules
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('fraud-trends')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-trends' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-trends' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
-                    >
-                        <TrendingUp size={18} /> Flagging Trends
+                        <Activity size={18} /> Transaction Monitor
                     </button>
 
                     <button
                         onClick={() => setActiveTab('reversals')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'reversals' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'reversals' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'reversals' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'reversals' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
                     >
-                        <RotateCcw size={18} /> Reversals
+                        <RotateCcw size={18} /> Reversals Action
                     </button>
                 </nav>
 
