@@ -52,26 +52,57 @@ namespace FinCore.Api.Controllers
                 if (rw != null) receiverWalletId = rw.Id;
             }
 
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userName = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email) ?? "Customer";
+
             var transaction = new Transaction
             {
                 ReferenceId = "TRX" + Guid.NewGuid().ToString("N")[..8].ToUpper(),
                 SenderWalletId = senderWallet.Id,
                 ReceiverWalletId = receiverWalletId,
                 Amount = request.Amount,
-                Status = "Pending",
+                Status = "Pending", // Placed in HELD/Pending state for Component C Human Review
                 Note = string.IsNullOrWhiteSpace(request.Note)
                     ? $"Transfer to {request.RecipientIdentifier}"
-                    : request.Note
+                    : request.Note,
+                Timestamp = DateTime.UtcNow
             };
 
             _context.Transactions.Add(transaction);
+
+            // Connect to Component C ReviewQueue single source of truth
+            var reviewCase = new ReviewQueue
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = Guid.NewGuid(),
+                QueueCode = transaction.ReferenceId,
+                Status = request.Amount >= 75000m ? "PendingSecondApproval" : "Queued",
+                Priority = request.Amount >= 75000m ? 3 : (request.Amount >= 25000m ? 2 : 1),
+                PriorityLabel = request.Amount >= 75000m ? "CRITICAL" : (request.Amount >= 25000m ? "HIGH" : "MEDIUM"),
+                Amount = request.Amount,
+                SenderName = userName,
+                SenderId = userIdStr ?? userId.ToString(),
+                RecipientName = request.RecipientIdentifier,
+                RecipientId = receiverUser?.Id.ToString() ?? request.RecipientIdentifier,
+                RiskScore = request.Amount >= 75000m ? 88.0 : (request.Amount >= 25000m ? 62.0 : 35.0),
+                FlagReasonsJson = System.Text.Json.JsonSerializer.Serialize(new[]
+                {
+                    new { label = request.Amount >= 75000m ? "Statutory Dual Approval Threshold (>75k LKR)" : "Standard Gateway Review", impact = "+30", color = "#f59e0b" },
+                    new { label = "Recipient Verification Pending", impact = "+20", color = "#ef4444" }
+                }),
+                OriginIp = "127.0.0.1",
+                Device = "Mobile Wallet App",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.ReviewQueues.Add(reviewCase);
             _context.SaveChanges();
 
             return Ok(new
             {
-                message = "Transfer initiated",
+                message = "Transfer placed in HELD state for security review",
                 referenceId = transaction.ReferenceId,
-                status = transaction.Status,
+                status = "Pending",
                 amount = transaction.Amount,
                 recipient = request.RecipientIdentifier
             });
@@ -106,7 +137,16 @@ namespace FinCore.Api.Controllers
 
             // --- Filters ---
             if (!string.IsNullOrWhiteSpace(status))
-                query = query.Where(t => t.Status.ToLower() == status.ToLower());
+            {
+                if (status.Equals("Held", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(t => t.Status.ToLower() == "held" || t.Status.ToLower() == "pending");
+                }
+                else
+                {
+                    query = query.Where(t => t.Status.ToLower() == status.ToLower());
+                }
+            }
 
             if (dateFrom.HasValue)
                 query = query.Where(t => t.Timestamp >= dateFrom.Value);
@@ -169,11 +209,35 @@ namespace FinCore.Api.Controllers
 
             if (transaction == null) return NotFound("Transaction not found.");
 
+            var reviewItem = _context.ReviewQueues.FirstOrDefault(q => q.QueueCode == transaction.ReferenceId);
+
             return Ok(new
             {
                 transaction.Id,
                 transaction.ReferenceId,
-                transaction.Status,
+                status = transaction.Status,
+                reviewStatus = reviewItem?.Status ?? (transaction.Status == "Completed" ? "Approved" : transaction.Status),
+                transaction.Amount,
+                transaction.Timestamp,
+                transaction.Note
+            });
+        }
+
+        // ── GET /api/transactions/ref/{referenceId} ───────────────────────────
+        [HttpGet("ref/{referenceId}")]
+        public IActionResult GetByReference(string referenceId)
+        {
+            var transaction = _context.Transactions.FirstOrDefault(t => t.ReferenceId == referenceId);
+            if (transaction == null) return NotFound("Transaction not found.");
+
+            var reviewItem = _context.ReviewQueues.FirstOrDefault(q => q.QueueCode == referenceId);
+
+            return Ok(new
+            {
+                transaction.Id,
+                transaction.ReferenceId,
+                status = transaction.Status,
+                reviewStatus = reviewItem?.Status ?? (transaction.Status == "Completed" ? "Approved" : transaction.Status),
                 transaction.Amount,
                 transaction.Timestamp,
                 transaction.Note

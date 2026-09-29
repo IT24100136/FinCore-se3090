@@ -6,6 +6,7 @@ import 'login_screen.dart';
 import 'notifications_screen.dart';
 import 'send_money_screen.dart';
 import 'transaction_history_screen.dart';
+import 'held_transactions_screen.dart';
 
 class WalletHomeScreen extends StatefulWidget {
   const WalletHomeScreen({super.key});
@@ -711,7 +712,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             ? const Color(0xFF2E7D32)
             : const Color(0xFF3B6FE8);
 
-    return Padding(
+    final rowWidget = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
@@ -766,22 +767,46 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
         ],
       ),
     );
+
+    if (isHeld) {
+      return InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const HeldTransactionsScreen(),
+            ),
+          );
+        },
+        child: rowWidget,
+      );
+    }
+
+    return rowWidget;
   }
 
   Widget _buildBadge(String status) {
-    final color = _statusColor(status);
+    final sUpper = status.toUpperCase();
+    final bool isHeld = sUpper == 'PENDING' || sUpper == 'HELD' || sUpper == 'QUEUED';
+    final color = isHeld ? const Color(0xFFD97706) : _statusColor(status);
+    final label = isHeld ? 'HELD' : sUpper;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(6),
+        border: isHeld ? Border.all(color: color.withValues(alpha: 0.3)) : null,
       ),
-      child: Text(status.toUpperCase(),
-          style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5)),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 }

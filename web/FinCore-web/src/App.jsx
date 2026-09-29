@@ -1,10 +1,10 @@
 import React from 'react';
-import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import AnalystReviewPage from './pages/AnalystReviewPage';
 
 function App() {
   return (
-    <div className="w-full min-h-screen bg-slate-50">
-      <AdminDashboardPage />
+    <div style={{ width: '100%', minHeight: '100vh', margin: 0, padding: 0 }}>
+      <AnalystReviewPage />
     </div>
   );
 }
