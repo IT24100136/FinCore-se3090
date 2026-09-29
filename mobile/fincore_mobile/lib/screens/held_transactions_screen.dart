@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/held_transaction_model.dart';
 import '../services/held_transaction_service.dart';
+import 'flagged_transaction_screen.dart'; // Added import for your new screen
 
 class HeldTransactionsScreen extends StatefulWidget {
   final String? customerId;
@@ -44,68 +45,15 @@ class _HeldTransactionsScreenState extends State<HeldTransactionsScreen> {
     }
   }
 
+  // Updated to route directly to your new FlaggedTransactionScreen
   void _onTransactionTapped(HeldTransaction item) {
-    try {
-      Navigator.pushNamed(
-        context,
-        '/transaction-flag-explanation',
-        arguments: {
-          'transactionId': item.transactionId,
-          'code': item.transactionCode,
-          'transactionCode': item.transactionCode,
-          'amount': item.amount,
-          'status': item.status,
-        },
-      ).catchError((_) {
-        _showHandoffNotice(item);
-        return null;
-      });
-    } catch (_) {
-      _showHandoffNotice(item);
-    }
-  }
-
-  void _showHandoffNotice(HeldTransaction item) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.white,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Color(0xFF3B6FE8), width: 1.2),
-        ),
-        margin: const EdgeInsets.all(16),
-        content: Row(
-          children: [
-            const Icon(Icons.info_outline_rounded, color: Color(0xFF3B6FE8), size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Navigating to Student 2's Flag Explanation Screen",
-                    style: TextStyle(
-                      color: Color(0xFF1A2340),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "Passing ${item.transactionCode} to Explainability module",
-                    style: const TextStyle(
-                      color: Color(0xFF8A94A6),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FlaggedTransactionScreen(
+          amount: item.amount,
+          transactionId: item.transactionId,
+          primaryShapFeature: item.transactionCode, // Passes the code to your SHAP translator
         ),
       ),
     );
