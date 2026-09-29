@@ -8,10 +8,14 @@ from agents.approval_coordinator_agent import (
     CoordinatorResult,
     DecisionDispatchInput
 )
+from agents.tool_use_agent import (
+    ToolUseAgent,
+    NotificationRequestInput
+)
 
 app = FastAPI(
-    title="FinCore - Human-Approval Coordinator Agent (Component C)",
-    description="Agentic AI service coordinating high-impact execution pauses, step-up challenges, dual approval gates, and telemetry circuit breaker fallbacks.",
+    title="FinCore - Multi-Agent System (Component C & D)",
+    description="Agentic AI service coordinating high-impact execution pauses, step-up challenges, dual approval gates, and external notification execution tool boundary.",
     version="1.0.0"
 )
 
@@ -25,14 +29,15 @@ app.add_middleware(
 )
 
 coordinator_agent = ApprovalCoordinatorAgent()
+tool_use_agent = ToolUseAgent()
 
 
 @app.get("/health")
 def health_check():
     return {
         "status": "online",
-        "service": "FinCore Approval-Coordinator Agent",
-        "component": "Component C",
+        "service": "FinCore Multi-Agent Service",
+        "components": ["Component C (Coordinator)", "Component D (Tool-Use)"],
         "version": "1.0.0"
     }
 
@@ -85,3 +90,16 @@ async def dispatch_decision(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error dispatching decision: {str(e)}")
+
+
+@app.post("/agent/tools/notify")
+async def notify_customer(payload: NotificationRequestInput):
+    """
+    Triggers external customer notification via Tool-Use Agent (Component D).
+    Uses exponential backoff retry logic to post to ASP.NET Core backend.
+    """
+    try:
+        result = await tool_use_agent.process_decision(payload)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tool-Use Agent error: {str(e)}")
