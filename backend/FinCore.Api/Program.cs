@@ -20,7 +20,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddSwaggerGen(); 
+builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<IGeolocationService, GeolocationService>();
 builder.Services.AddScoped<IFraudService, FraudService>();
@@ -46,16 +46,19 @@ builder.Services.AddScoped<IAnomalyDetectionAgent, AnomalyDetectionAgent>();
 
 var connStr = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=fincore.db";
 var dbProvider = builder.Configuration["DbProvider"];
+var isPostgres = string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCase)
+                 || connStr.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+                 || connStr.Contains("Username=", StringComparison.OrdinalIgnoreCase);
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCase))
+    if (isPostgres)
     {
         options.UseNpgsql(connStr);
     }
     else
     {
-        options.UseSqlite("Data Source=fincore.db");
+        options.UseSqlite(connStr.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase) ? connStr : "Data Source=fincore.db");
     }
 });
 

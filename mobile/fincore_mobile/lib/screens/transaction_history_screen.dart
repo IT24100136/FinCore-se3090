@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/wallet_service.dart';
 import '../services/held_transaction_service.dart';
 import 'transaction_status_screen.dart';
+import 'flagged_transaction_screen.dart'; // Imported your new screen
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -83,6 +84,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           'note': 'Transfer to ${h.recipientName}',
           'estimatedWaitMinutes': h.estimatedWaitMinutes,
           'priorityLabel': h.priorityLabel,
+          'primaryShapFeature': h.transactionCode,
         }).toList();
 
         if (mounted) {
@@ -424,24 +426,19 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           final transactionId =
               tx['transactionId'] ?? tx['id']?.toString() ?? '';
           final code = tx['referenceId'] ?? 'TX-UNKNOWN';
-          try {
-            Navigator.pushNamed(
-              context,
-              '/transaction-flag-explanation',
-              arguments: {
-                'transactionId': transactionId,
-                'code': code,
-                'transactionCode': code,
-                'amount': amount.abs(),
-                'status': status,
-              },
-            ).catchError((_) {
-              _showExplanationFallback(code);
-              return null;
-            });
-          } catch (_) {
-            _showExplanationFallback(code);
-          }
+          final shapFeature = tx['primaryShapFeature']?.toString() ?? code;
+          
+          // Replaced placeholder logic with direct navigation to your SHAP screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FlaggedTransactionScreen(
+                amount: amount.abs(),
+                transactionId: transactionId,
+                primaryShapFeature: shapFeature,
+              ),
+            ),
+          );
         } else {
           Navigator.push(
             context,
@@ -567,53 +564,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                     ),
                   ),
               ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showExplanationFallback(String code) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.white,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Color(0xFF3B6FE8), width: 1.2),
-        ),
-        margin: const EdgeInsets.all(16),
-        content: Row(
-          children: [
-            const Icon(Icons.info_outline_rounded,
-                color: Color(0xFF3B6FE8), size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Navigating to Student 2's Flag Explanation Screen",
-                    style: TextStyle(
-                      color: Color(0xFF1A2340),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "Passing $code to Explainability module",
-                    style: const TextStyle(
-                      color: Color(0xFF8A94A6),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
