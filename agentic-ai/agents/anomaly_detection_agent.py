@@ -15,7 +15,9 @@ Downstream Integration:
 
 from __future__ import annotations
 
+import math
 import logging
+from datetime import datetime, timezone
 from typing import TypedDict, List, Dict, Any, Optional, Union
 # ---------------------------------------------------------------------------
 # Dynamic Dependency Resolution & Static Analysis Compatibility
@@ -47,6 +49,7 @@ logger = logging.getLogger("AnomalyDetectionAgent")
 BASELINE_AMOUNT_THRESHOLD: float = 10000.0   # Spending spike trigger ($10,000 baseline)
 BASELINE_VELOCITY_THRESHOLD: int = 3         # Max normal transactions in 24 hours
 ANOMALY_SCORE_FLAG_THRESHOLD: float = 0.50   # Threshold above which transaction is flagged
+IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH: float = 900.0  # Max commercial aircraft velocity (~900 km/h)
 
 # Standardized feature codes aligned with shap_service.py STANDARDIZED_REASONS
 SHAP_FEATURE_LOCATION_ANOMALY: str = "location_anomaly"
@@ -77,6 +80,12 @@ class AnomalyAgentState(TypedDict, total=False):
         device_id (str): Unique hardware/client identifier.
         ip_location (str): Geolocation or IP address classification of the client.
         velocity_24h (int): Number of transactions initiated by user in last 24 hours.
+        prev_tx_lat (Optional[float]): Latitude of the user's previous transaction.
+        prev_tx_lon (Optional[float]): Longitude of the user's previous transaction.
+        prev_tx_timestamp (Optional[str]): ISO 8601 timestamp string of previous transaction.
+        current_lat (Optional[float]): Latitude of the current transaction.
+        current_lon (Optional[float]): Longitude of the current transaction.
+        current_timestamp (Optional[str]): ISO 8601 timestamp string of current transaction.
         anomaly_score (float): Calculated fraud anomaly score normalized between 0.0 and 1.0.
         flagged_signals (List[str]): Explanatory behavioral signals flagged during evaluation.
         needs_deep_context (bool): Route indicator determining if deep historical context is required.
@@ -91,6 +100,12 @@ class AnomalyAgentState(TypedDict, total=False):
     device_id: str
     ip_location: str
     velocity_24h: int
+    prev_tx_lat: Optional[float]
+    prev_tx_lon: Optional[float]
+    prev_tx_timestamp: Optional[str]
+    current_lat: Optional[float]
+    current_lon: Optional[float]
+    current_timestamp: Optional[str]
     anomaly_score: float
     flagged_signals: List[str]
     needs_deep_context: bool
@@ -102,7 +117,47 @@ class AnomalyAgentState(TypedDict, total=False):
 
 
 # ============================================================================
-# 3. MOCK CONTEXT RETRIEVAL TOOLS (USED BY NODE 2)
+# 3. HAVERSINE DISTANCE HELPER
+# ============================================================================
+
+def calculate_haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculates the great-circle distance between two geographic coordinates on Earth
+    using the Haversine formula.
+
+    Args:
+        lat1 (float): Latitude of origin point in decimal degrees.
+        lon1 (float): Longitude of origin point in decimal degrees.
+        lat2 (float): Latitude of destination point in decimal degrees.
+        lon2 (float): Longitude of destination point in decimal degrees.
+
+    Returns:
+        float: Great-circle distance in kilometers (km).
+    """
+    # Earth's mean spherical radius in kilometers
+    EARTH_RADIUS_KM: float = 6371.0
+
+    # Convert degrees to radians
+    phi1: float = math.radians(lat1)
+    phi2: float = math.radians(lat2)
+    delta_phi: float = math.radians(lat2 - lat1)
+    delta_lambda: float = math.radians(lon2 - lon1)
+
+    # Standard Haversine trigonometric formulation
+    a: float = (
+        math.sin(delta_phi / 2.0) ** 2 +
+        math.cos(phi1) * math.cos(phi2) * (math.sin(delta_lambda / 2.0) ** 2)
+    )
+
+    # Clamp value within domain [-1.0, 1.0] to prevent floating point inaccuracies
+    a = min(1.0, max(0.0, a))
+    c: float = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+
+    return round(EARTH_RADIUS_KM * c, 2)
+
+
+# ============================================================================
+# 4. MOCK CONTEXT RETRIEVAL TOOLS (USED BY NODE 2)
 # ============================================================================
 
 def retrieve_extended_device_history(device_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
@@ -151,19 +206,86 @@ def retrieve_extended_velocity_history(user_id: Optional[str], current_velocity_
     }
 
 
-def retrieve_ip_intelligence(ip_location: str) -> Dict[str, Any]:
+def retrieve_ip_intelligence(
+    ip_location: str,
+    prev_lat: Optional[float] = None,
+    prev_lon: Optional[float] = None,
+    prev_timestamp: Optional[Union[str, datetime]] = None,
+    current_lat: Optional[float] = None,
+    current_lon: Optional[float] = None,
+    current_timestamp: Optional[Union[str, datetime]] = None
+) -> Dict[str, Any]:
     """
-    Simulated IP intelligence and VPN/proxy telemetry tool.
+    Evaluates IP intelligence, VPN/proxy telemetry, and Impossible Travel (Velocity of Travel).
+
+    Calculates the time elapsed between prev_tx_timestamp and current_timestamp (in hours),
+    computes the Haversine great-circle distance (in km), and calculates travel speed:
+        speed_kmh = distance_km / time_elapsed_hours
+
+    If speed_kmh > 900 km/h (commercial jet speed limit), flags an IMPOSSIBLE_TRAVEL anomaly.
     """
     ip_clean = (ip_location or "").strip().lower()
     is_proxy_or_vpn = any(indicator in ip_clean for indicator in SUSPICIOUS_LOCATION_INDICATORS)
 
-    return {
+    telemetry: Dict[str, Any] = {
         "is_datacenter_or_vpn": is_proxy_or_vpn,
         "asn_risk_tier": "HIGH" if is_proxy_or_vpn else "LOW",
         "geo_distance_from_billing_km": 8500 if is_proxy_or_vpn else 15,
+        "is_impossible_travel": False,
+        "distance_km": 0.0,
+        "time_elapsed_hours": 0.0,
+        "speed_kmh": 0.0,
         "verdict": "HIGH_RISK_GEO_LOCATION" if is_proxy_or_vpn else "NORMAL_DOMESTIC_LOCATION"
     }
+
+    # Evaluate Velocity of Travel if coordinates and timestamps are supplied
+    has_coordinates = (
+        prev_lat is not None and prev_lon is not None and
+        current_lat is not None and current_lon is not None
+    )
+    has_timestamps = prev_timestamp is not None and current_timestamp is not None
+
+    if has_coordinates and has_timestamps:
+        try:
+            # 1. Calculate great-circle distance using Haversine formula
+            distance_km = calculate_haversine_distance(
+                float(prev_lat), float(prev_lon), float(current_lat), float(current_lon)
+            )
+
+            # 2. Parse ISO timestamps
+            def _parse_ts(ts: Union[str, datetime]) -> datetime:
+                if isinstance(ts, datetime):
+                    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+                clean_str = str(ts).strip()
+                if clean_str.endswith("Z"):
+                    clean_str = clean_str[:-1] + "+00:00"
+                parsed = datetime.fromisoformat(clean_str)
+                return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+            prev_dt = _parse_ts(prev_timestamp)
+            curr_dt = _parse_ts(current_timestamp)
+
+            # 3. Calculate elapsed time in hours
+            diff_seconds = abs((curr_dt - prev_dt).total_seconds())
+            time_elapsed_hours = max(diff_seconds / 3600.0, 0.0001)  # Safeguard against zero division
+
+            # 4. Calculate travel velocity in km/h
+            speed_kmh = round(distance_km / time_elapsed_hours, 2)
+
+            telemetry["distance_km"] = distance_km
+            telemetry["time_elapsed_hours"] = round(time_elapsed_hours, 4)
+            telemetry["speed_kmh"] = speed_kmh
+
+            # Flag if velocity exceeds commercial aircraft cruising speed (900 km/h)
+            if speed_kmh > IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH:
+                telemetry["is_impossible_travel"] = True
+                telemetry["verdict"] = "IMPOSSIBLE_TRAVEL_DETECTED"
+                telemetry["asn_risk_tier"] = "CRITICAL"
+        except Exception as e:
+            logger.warning(f"Error calculating impossible travel metrics: {e}")
+
+    return telemetry
+
 
 
 def retrieve_extended_spending_history(user_id: Optional[str], amount: float) -> Dict[str, Any]:
@@ -241,8 +363,28 @@ def initial_signal_evaluation_node(state: AnomalyAgentState) -> Dict[str, Any]:
         signals_count += 1
         logger.warning(f"[{tx_id}] Flagged: {signal}")
 
-    # 4. Baseline Heuristic: Location / IP Mismatch
+    # 4. Baseline Heuristic: Location / IP Mismatch & Impossible Travel Pre-check
     is_location_suspicious = any(k in ip_location.lower() for k in SUSPICIOUS_LOCATION_INDICATORS)
+    has_coord_data = (
+        state.get("prev_tx_lat") is not None and
+        state.get("prev_tx_lon") is not None and
+        state.get("current_lat") is not None and
+        state.get("current_lon") is not None
+    )
+    if has_coord_data:
+        try:
+            p_lat = float(state["prev_tx_lat"])  # type: ignore
+            p_lon = float(state["prev_tx_lon"])  # type: ignore
+            c_lat = float(state["current_lat"])  # type: ignore
+            c_lon = float(state["current_lon"])  # type: ignore
+            quick_dist = calculate_haversine_distance(p_lat, p_lon, c_lat, c_lon)
+            # If distance exceeds 500 km, mark location as requiring deep impossible travel inspection
+            if quick_dist > 500.0:
+                is_location_suspicious = True
+        except (ValueError, TypeError):
+            pass
+
+
     if is_location_suspicious:
         signal = f"LOCATION_MISMATCH: Originating IP/Location '{ip_location}' matches suspicious routing or geo anomaly"
         flagged_signals.append(signal)
@@ -254,7 +396,7 @@ def initial_signal_evaluation_node(state: AnomalyAgentState) -> Dict[str, Any]:
     # - Spending spike exceeds baseline threshold (needs historical baseline check)
     # - New device detected (needs device fingerprinting/reputation history)
     # - Velocity > 3 (needs extended 7-day velocity/burst analysis)
-    # - Suspicious location detected (needs ASN/VPN intelligence)
+    # - Suspicious location or coordinate relocation detected (needs Impossible Travel intelligence)
     # - Or two or more baseline heuristics fired concurrently
     needs_deep_context = (
         is_amount_spike or
@@ -283,7 +425,7 @@ def context_gathering_node(state: AnomalyAgentState) -> Dict[str, Any]:
     Executes mock/tool retrievals to:
     1. Query extended device history (hardware fingerprint, emulator check, multi-account links).
     2. Check broader velocity timeframe (7-day burst analysis, rapid successive transfers).
-    3. Query IP intelligence (ASN risk, proxy detection, geo-distance).
+    3. Query IP intelligence and calculate Velocity of Travel / Impossible Travel.
     4. Query historical spending profile (90-day baseline deviation check).
 
     Adjusts and enriches the `flagged_signals` based on the telemetry discovered.
@@ -317,12 +459,28 @@ def context_gathering_node(state: AnomalyAgentState) -> Dict[str, Any]:
             f"EXTENDED_VELOCITY_SURGE: Multi-day burst confirmed ({total_7d} transactions in 7d; avg interval {burst_interval:.1f} mins)"
         )
 
-    # Tool Execution 3: IP & Network Telemetry
-    ip_intel = retrieve_ip_intelligence(ip_location=ip_location)
-    if ip_intel.get("is_datacenter_or_vpn"):
+    # Tool Execution 3: IP Intelligence & Velocity of Travel (Impossible Travel) Telemetry
+    ip_intel = retrieve_ip_intelligence(
+        ip_location=ip_location,
+        prev_lat=state.get("prev_tx_lat"),
+        prev_lon=state.get("prev_tx_lon"),
+        prev_timestamp=state.get("prev_tx_timestamp"),
+        current_lat=state.get("current_lat"),
+        current_lon=state.get("current_lon"),
+        current_timestamp=state.get("current_timestamp")
+    )
+    if ip_intel.get("is_impossible_travel"):
+        speed = ip_intel.get("speed_kmh", 0.0)
+        dist = ip_intel.get("distance_km", 0.0)
+        hrs = ip_intel.get("time_elapsed_hours", 0.0)
+        flagged_signals.append(
+            f"IMPOSSIBLE_TRAVEL: Physical relocation speed of {speed:,.1f} km/h over {dist:,.1f} km in {hrs:.2f}h exceeds commercial aircraft limit (900 km/h)"
+        )
+    elif ip_intel.get("is_datacenter_or_vpn"):
         flagged_signals.append(
             f"NETWORK_ANOMALY: Geolocation resolved to datacenter VPN proxy with geo-distance of {ip_intel.get('geo_distance_from_billing_km')} km"
         )
+
 
     # Tool Execution 4: Historical Spending Telemetry
     spending_intel = retrieve_extended_spending_history(user_id=user_id, amount=amount)
@@ -415,19 +573,23 @@ def final_scoring_node(state: AnomalyAgentState) -> Dict[str, Any]:
     # ------------------------------------------------------------------------
     location_device_contribution = 0.05
 
-    # Check for new device
-    if any("NEW_DEVICE" in sig for sig in flagged_signals):
-        location_device_contribution += 0.30
+    # Check for impossible travel anomaly -> heavily contributes to location_anomaly
+    if any("IMPOSSIBLE_TRAVEL" in sig for sig in flagged_signals):
+        location_device_contribution = 1.0  # Maxed out risk for impossible physical relocation speed
+    else:
+        # Check for new device
+        if any("NEW_DEVICE" in sig for sig in flagged_signals):
+            location_device_contribution += 0.30
 
-    # Check for deep device emulator / hostile signals
-    if any("DEEP_DEVICE_RISK" in sig for sig in flagged_signals):
-        location_device_contribution += 0.40
+        # Check for deep device emulator / hostile signals
+        if any("DEEP_DEVICE_RISK" in sig for sig in flagged_signals):
+            location_device_contribution += 0.40
 
-    # Check for location mismatch / VPN
-    if any("LOCATION_MISMATCH" in sig for sig in flagged_signals):
-        location_device_contribution += 0.25
-    if any("NETWORK_ANOMALY" in sig for sig in flagged_signals):
-        location_device_contribution += 0.35
+        # Check for location mismatch / VPN
+        if any("LOCATION_MISMATCH" in sig for sig in flagged_signals):
+            location_device_contribution += 0.25
+        if any("NETWORK_ANOMALY" in sig for sig in flagged_signals):
+            location_device_contribution += 0.35
 
     location_device_contribution = min(location_device_contribution, 1.0)
 
@@ -595,6 +757,12 @@ def invoke_anomaly_agent(transaction_data: Dict[str, Any]) -> Dict[str, Any]:
         "device_id": str(transaction_data.get("device_id", "unknown_device")),
         "ip_location": str(transaction_data.get("ip_location", "Unknown Location")),
         "velocity_24h": int(transaction_data.get("velocity_24h", 0)),
+        "prev_tx_lat": transaction_data.get("prev_tx_lat"),
+        "prev_tx_lon": transaction_data.get("prev_tx_lon"),
+        "prev_tx_timestamp": transaction_data.get("prev_tx_timestamp"),
+        "current_lat": transaction_data.get("current_lat"),
+        "current_lon": transaction_data.get("current_lon"),
+        "current_timestamp": transaction_data.get("current_timestamp"),
         "flagged_signals": list(transaction_data.get("flagged_signals") or []),
         "needs_deep_context": False,
         "anomaly_score": 0.0,
@@ -666,20 +834,27 @@ if __name__ == "__main__":
         print(f"  * {sig}")
 
     # ------------------------------------------------------------------------
-    # TEST CASE 3: Device & Geolocation Anomaly (New Emulator & VPN)
-    # Expected: Node 1 flags new device + location -> routes to Node 2
+    # TEST CASE 3: Impossible Travel / Velocity of Travel Anomaly
+    # (London, UK to Colombo, Sri Lanka ~8,700 km in 1.0 hour => ~8,700 km/h >> 900 km/h)
+    # Expected: Node 1 flags relocation -> routes to Node 2 -> Haversine speed calculated
     #           -> Node 3 flags high anomaly score -> primary_shap_feature='location_anomaly'
     # ------------------------------------------------------------------------
-    print("\n--- Test Case 3: Device & Geolocation Anomaly (Untrusted Hardware & Datacenter VPN) ---")
-    mock_tx_location = {
+    print("\n--- Test Case 3: Impossible Travel Anomaly (London to Colombo in 1 Hour) ---")
+    mock_tx_impossible_travel = {
         "transaction_id": "TX-10003",
         "user_id": "USR-8819",
-        "amount": 2500.0,
-        "device_id": "dev_new_emulator_android_x86",
-        "ip_location": "Commercial Datacenter VPN, Lagos",
-        "velocity_24h": 1
+        "amount": 1500.0,
+        "device_id": "device_iphone_trusted_01",
+        "ip_location": "Colombo, Sri Lanka",
+        "velocity_24h": 1,
+        "prev_tx_lat": 51.5074,       # London, UK
+        "prev_tx_lon": -0.1278,
+        "prev_tx_timestamp": "2026-10-01T20:00:00Z",
+        "current_lat": 6.9271,         # Colombo, Sri Lanka (~8,715 km distance)
+        "current_lon": 79.8612,
+        "current_timestamp": "2026-10-01T21:00:00Z"   # Exactly 1.0 hour elapsed
     }
-    result_3 = invoke_anomaly_agent(mock_tx_location)
+    result_3 = invoke_anomaly_agent(mock_tx_impossible_travel)
     print(f"Transaction ID       : {result_3.get('transaction_id')}")
     print(f"Needs Deep Context   : {result_3.get('needs_deep_context')}")
     print(f"Calculated Score     : {result_3.get('anomaly_score'):.4f} (Anomaly: {result_3.get('is_anomaly')})")
@@ -700,7 +875,13 @@ if __name__ == "__main__":
         "amount": 120.0,
         "device_id": "device_iphone_trusted_01",
         "ip_location": "Colombo, Sri Lanka",
-        "velocity_24h": 1
+        "velocity_24h": 1,
+        "prev_tx_lat": 6.9271,
+        "prev_tx_lon": 79.8612,
+        "prev_tx_timestamp": "2026-10-01T15:00:00Z",
+        "current_lat": 6.9275,
+        "current_lon": 79.8615,
+        "current_timestamp": "2026-10-01T21:00:00Z"
     }
     result_4 = invoke_anomaly_agent(mock_tx_benign)
     print(f"Transaction ID       : {result_4.get('transaction_id')}")

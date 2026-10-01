@@ -138,17 +138,42 @@ namespace FinCore.Api.Services.FraudService
             {
                 try
                 {
+                    // -------------------------------------------------------------
+                    // Impossible Travel (Velocity of Travel) Telemetry Preparation
+                    // -------------------------------------------------------------
+                    // Current transaction coordinates (resolved from IP geolocation or standard fallback)
+                    double currentLat = location.Latitude ?? 6.9271;
+                    double currentLon = location.Longitude ?? 79.8612;
+                    string currentTimestamp = DateTime.UtcNow.ToString("o"); // ISO 8601 UTC format
+
+                    // Simulated previous transaction telemetry for testing Impossible Travel (> 900 km/h)
+                    // Simulates a transaction in London (~5,400+ km away from Colombo) occurring 1 hour ago
+                    double prevTxLat = 51.5074;
+                    double prevTxLon = -0.1278;
+                    string prevTxTimestamp = DateTime.UtcNow.AddHours(-1).ToString("o");
+
+                    // Construct anonymous payload expected by the Python Agent / SHAP service
                     var shapPayload = new
                     {
                         transaction_id = transactionId.ToString(),
                         amount = (double)amount,
+                        prev_tx_lat = prevTxLat,
+                        prev_tx_lon = prevTxLon,
+                        prev_tx_timestamp = prevTxTimestamp,
+                        current_lat = currentLat,
+                        current_lon = currentLon,
+                        current_timestamp = currentTimestamp,
                         features = new Dictionary<string, double>
                         {
                             { "amount", (double)amount },
                             { "ip_distance_km", location.IsSuccessful ? 0.0 : 1250.0 },
                             { "is_new_device", 1.0 },
                             { "tx_count_24h", 3.0 },
-                            { "amount_to_avg_ratio", (double)(amount / 15000m) }
+                            { "amount_to_avg_ratio", (double)(amount / 15000m) },
+                            { "prev_tx_lat", prevTxLat },
+                            { "prev_tx_lon", prevTxLon },
+                            { "current_lat", currentLat },
+                            { "current_lon", currentLon }
                         }
                     };
 
