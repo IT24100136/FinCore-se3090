@@ -132,3 +132,35 @@ def test_shap_service_compatibility():
     assert SHAP_FEATURE_HIGH_AMOUNT in valid_reasons
     assert SHAP_FEATURE_HIGH_VELOCITY in valid_reasons
     assert SHAP_FEATURE_LOCATION_ANOMALY in valid_reasons
+
+
+def test_impossible_travel_anomaly():
+    """
+    Test 6: Impossible Travel (Velocity of Travel).
+    User transacts in London and then 1 hour later in Colombo (~8,713 km apart, speed ~8,713 km/h > 900 km/h).
+    Verifies deep context is engaged, IMPOSSIBLE_TRAVEL is flagged,
+    anomaly_score is high, and primary_shap_feature is 'location_anomaly'.
+    """
+    payload = {
+        "transaction_id": "TX-TEST-IMPOSSIBLE-TRAVEL",
+        "user_id": "USR-5005",
+        "amount": 450.0,
+        "device_id": "device_iphone_trusted_01",
+        "ip_location": "Colombo, Sri Lanka",
+        "velocity_24h": 1,
+        "prev_tx_lat": 51.5074,
+        "prev_tx_lon": -0.1278,
+        "prev_tx_timestamp": "2026-10-01T12:00:00Z",
+        "current_lat": 6.9271,
+        "current_lon": 79.8612,
+        "current_timestamp": "2026-10-01T13:00:00Z",
+    }
+
+    result = invoke_anomaly_agent(payload)
+
+    assert result["needs_deep_context"] is True
+    assert result["is_anomaly"] is True
+    assert result["anomaly_score"] >= 0.50
+    assert result["primary_shap_feature"] == SHAP_FEATURE_LOCATION_ANOMALY
+    assert any("IMPOSSIBLE_TRAVEL" in sig for sig in result["flagged_signals"])
+

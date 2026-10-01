@@ -282,6 +282,13 @@ class ExplainTransactionRequest(BaseModel):
             }
         }
     )
+    prev_tx_lat: Optional[float] = Field(default=None, description="Previous transaction latitude")
+    prev_tx_lon: Optional[float] = Field(default=None, description="Previous transaction longitude")
+    prev_tx_timestamp: Optional[str] = Field(default=None, description="Previous transaction ISO 8601 timestamp")
+    current_lat: Optional[float] = Field(default=None, description="Current transaction latitude")
+    current_lon: Optional[float] = Field(default=None, description="Current transaction longitude")
+    current_timestamp: Optional[str] = Field(default=None, description="Current transaction ISO 8601 timestamp")
+
 
 
 class ExplainTransactionResponse(BaseModel):
