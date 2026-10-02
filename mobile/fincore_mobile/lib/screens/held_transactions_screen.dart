@@ -45,7 +45,6 @@ class _HeldTransactionsScreenState extends State<HeldTransactionsScreen> {
     }
   }
 
-  // Updated to route directly to your new FlaggedTransactionScreen
   void _onTransactionTapped(HeldTransaction item) {
     Navigator.push(
       context,
@@ -53,7 +52,10 @@ class _HeldTransactionsScreenState extends State<HeldTransactionsScreen> {
         builder: (context) => FlaggedTransactionScreen(
           amount: item.amount,
           transactionId: item.transactionId,
-          primaryShapFeature: item.transactionCode, // Passes the code to your SHAP translator
+          primaryShapFeature: item.primaryReason ?? (item.reasons.isNotEmpty ? item.reasons.first : 'Behavioral Pattern Anomaly'),
+          referenceCode: item.transactionCode,
+          riskScore: item.riskScore,
+          holdReasons: item.reasons,
         ),
       ),
     );

@@ -7,6 +7,8 @@ using FinCore.Api.Services.FraudService;
 using FinCore.Api.Services.NotificationService;
 using Microsoft.SemanticKernel;
 
+using FinCore.Api.Hubs;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Configure the CORS policy to allow your Vite frontend (and Flutter Web)
@@ -14,12 +16,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(origin => true)
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
+builder.Services.AddSignalR();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<IGeolocationService, GeolocationService>();
@@ -108,6 +112,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<TransactionHub>("/hubs/transactions");
 
 app.Run();
 

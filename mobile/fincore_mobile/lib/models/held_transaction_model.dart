@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 class HeldTransaction {
@@ -12,6 +13,8 @@ class HeldTransaction {
   final int priority;
   final String priorityLabel;
   final double riskScore;
+  final List<String> reasons;
+  final String? primaryReason;
 
   const HeldTransaction({
     required this.id,
@@ -25,6 +28,8 @@ class HeldTransaction {
     this.priority = 1,
     this.priorityLabel = 'MEDIUM',
     this.riskScore = 40.0,
+    this.reasons = const [],
+    this.primaryReason,
   });
 
   factory HeldTransaction.fromJson(Map<String, dynamic> json) {
@@ -57,6 +62,49 @@ class HeldTransaction {
 
     final rawAmount = (json['amount'] ?? json['displayAmount'] ?? 0.0) as num;
 
+    // Parse reasons
+    final List<String> parsedReasons = [];
+    if (json['flagReasonsList'] is List) {
+      for (final r in json['flagReasonsList']) {
+        if (r is Map && r['label'] != null) {
+          parsedReasons.add(r['label'].toString());
+        } else if (r != null) {
+          parsedReasons.add(r.toString());
+        }
+      }
+    } else if (json['flagReasons'] != null) {
+      final str = json['flagReasons'].toString();
+      if (str.startsWith('[')) {
+        try {
+          final decoded = jsonDecode(str);
+          if (decoded is List) {
+            for (final r in decoded) {
+              if (r is Map && r['label'] != null) {
+                parsedReasons.add(r['label'].toString());
+              } else if (r != null) {
+                parsedReasons.add(r.toString());
+              }
+            }
+          }
+        } catch (_) {}
+      } else {
+        parsedReasons.addAll(str.split(';').map((s) => s.trim()).where((s) => s.isNotEmpty));
+      }
+    } else if (json['reasons'] != null) {
+      final str = json['reasons'].toString();
+      parsedReasons.addAll(str.split(';').map((s) => s.trim()).where((s) => s.isNotEmpty));
+    }
+
+    if (parsedReasons.isEmpty) {
+      if (rawAmount >= 75000) {
+        parsedReasons.add('Statutory Threshold Exceeded (>= 75,000 LKR Dual Authorization)');
+      } else {
+        parsedReasons.add('Behavioral Pattern & Device Anomaly');
+      }
+    }
+
+    final primary = parsedReasons.isNotEmpty ? parsedReasons.first : null;
+
     return HeldTransaction(
       id: json['id']?.toString() ?? code,
       transactionId: json['transactionId']?.toString() ?? json['id']?.toString() ?? code,
@@ -69,6 +117,8 @@ class HeldTransaction {
       priority: (json['priority'] as num?)?.toInt() ?? 1,
       priorityLabel: json['priorityLabel']?.toString() ?? 'MEDIUM',
       riskScore: (json['riskScore'] as num?)?.toDouble() ?? 40.0,
+      reasons: parsedReasons,
+      primaryReason: primary,
     );
   }
 

@@ -448,6 +448,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 amount: amount.abs(),
                 recipient: tx['note'] ?? '',
                 status: status,
+                riskScore: (tx['riskScore'] as num?)?.toInt(),
               ),
             ),
           );

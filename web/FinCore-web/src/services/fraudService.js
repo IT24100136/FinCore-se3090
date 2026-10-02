@@ -383,48 +383,53 @@ export const fraudService = {
     try {
       // First attempt backend /api/fraud/flags
       const response = await axios.get(`${FRAUD_API_URL}/flags`);
-      if (Array.isArray(response.data) && response.data.length > 0) {
+      if (Array.isArray(response.data)) {
+        if (response.data.length === 0) {
+          return [];
+        }
+
         // Map backend FraudFlag objects into UI rich flag models
         return response.data.map((f, idx) => {
-          const matchFallback = INITIAL_FLAGS[idx % INITIAL_FLAGS.length];
           const reasonsList = (f.reasons || '').split(';').filter(Boolean).map((r, rIdx) => ({
             id: `RUL-00${rIdx + 1}`,
-            label: r.trim().substring(0, 30),
+            label: r.trim().substring(0, 35),
             points: 25,
             color: '#ef4444',
             description: r.trim()
           }));
 
+          const txRef = f.referenceId || `TX-${f.transactionId || 88290 + idx}`;
+
           return {
             id: f.id,
-            transactionId: `TX-${f.transactionId || 88290 + idx}`,
+            transactionId: txRef,
             rawTxId: f.transactionId,
-            queueId: `Q-${110 - idx}`,
-            customerName: matchFallback?.customerName || `Customer_${f.transactionId}`,
-            customerId: matchFallback?.customerId || `USR-${3000 + idx}`,
-            recipientName: matchFallback?.recipientName || 'Verified Merchant',
-            recipientId: matchFallback?.recipientId || 'USR-9000',
-            recipientAccount: matchFallback?.recipientAccount || 'ACC-88392011',
-            amount: matchFallback?.amount || 75000,
-            riskScore: f.riskScore || 65,
+            queueId: txRef,
+            customerName: f.senderName || `Customer_${f.transactionId}`,
+            customerId: `USR-${f.transactionId}`,
+            recipientName: f.recipientName || 'Recipient',
+            recipientId: `REC-${f.transactionId}`,
+            recipientAccount: 'ACC-88392011',
+            amount: Number(f.amount) || 0,
+            riskScore: f.riskScore || 0,
             status: f.status || 'Flagged',
             priority: (f.riskScore >= 75) ? 'CRITICAL' : (f.riskScore >= 40) ? 'HIGH' : 'MEDIUM',
-            originIp: matchFallback?.originIp || '203.143.88.71',
-            ipCity: matchFallback?.ipCity || 'Colombo',
-            ipCountry: matchFallback?.ipCountry || 'Sri Lanka',
-            homeLocation: matchFallback?.homeLocation || 'Colombo, Western Province',
-            distanceDeltaKm: matchFallback?.distanceDeltaKm || 15,
-            latitude: matchFallback?.latitude || 6.9271,
-            longitude: matchFallback?.longitude || 79.8612,
-            homeLatitude: matchFallback?.homeLatitude || 6.9271,
-            homeLongitude: matchFallback?.homeLongitude || 79.8612,
-            device: matchFallback?.device || 'Chrome — Windows 11',
-            deviceFingerprint: matchFallback?.deviceFingerprint || 'fp-auto-verified',
-            paymentChannel: matchFallback?.paymentChannel || 'Real-time Net Settlement',
+            originIp: f.originIp || '127.0.0.1',
+            ipCity: 'Colombo',
+            ipCountry: 'Sri Lanka',
+            homeLocation: 'Colombo, Western Province',
+            distanceDeltaKm: 15,
+            latitude: 6.9271,
+            longitude: 79.8612,
+            homeLatitude: 6.9271,
+            homeLongitude: 79.8612,
+            device: f.device || 'Mobile App',
+            deviceFingerprint: 'fp-auto-verified',
+            paymentChannel: 'Instant Transfer',
             createdAt: f.createdAt || new Date().toISOString(),
-            triggeredRules: reasonsList.length > 0 ? reasonsList : matchFallback?.triggeredRules || [],
+            triggeredRules: reasonsList.length > 0 ? reasonsList : [{ id: 'RUL-001', label: 'Fraud Detection Trigger', points: f.riskScore || 50, color: '#ef4444', description: f.reasons || 'Flagged by risk engine' }],
             analystNotes: '',
-            requiresDualApproval: (matchFallback?.amount || 75000) >= 75000
+            requiresDualApproval: (Number(f.amount) || 0) >= 75000
           };
         });
       }

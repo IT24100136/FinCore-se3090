@@ -11,11 +11,12 @@ const MOCK_TRANSACTIONS = [
 
 const getStatusColor = (status) => {
   switch (status) {
-    case 'Completed': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-    case 'Held': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-    case 'Reversed': return 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-    case 'Pending': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-    default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    case 'Completed': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'Held': return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'PendingSecondApproval': return 'bg-purple-50 text-purple-700 border-purple-200';
+    case 'Reversed': return 'bg-rose-50 text-rose-700 border-rose-200';
+    case 'Pending': return 'bg-blue-50 text-blue-700 border-blue-200';
+    default: return 'bg-slate-100 text-slate-700 border-slate-200';
   }
 };
 
@@ -28,39 +29,38 @@ const TransactionMonitoringDashboard = () => {
   
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
-  const itemsPerPage = 7;
+  const itemsPerPage = 8;
+
+  const fetchTransactions = async (isInitial = false) => {
+    try {
+      if (isInitial) setLoading(true);
+      const token = localStorage.getItem('token'); 
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch('/api/transactions/all', { headers });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch transactions');
+      }
+      
+      const result = await response.json();
+      const fetchedData = Array.isArray(result.data) ? result.data : [];
+      setTransactions(fetchedData);
+    } catch (error) {
+      // Fallback only if no data currently loaded
+      setTransactions(prev => prev.length === 0 ? MOCK_TRANSACTIONS : prev);
+    } finally {
+      if (isInitial) setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTransactions = async () => {
-      try {
-        setLoading(true);
-        // Include the token if authentication is enabled on the backend
-        const token = localStorage.getItem('token'); 
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const response = await fetch('/api/transactions/all', { headers });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch transactions');
-        }
-        
-        const result = await response.json();
-        
-        // Ensure data is an array
-        const fetchedData = Array.isArray(result.data) ? result.data : [];
-        setTransactions(fetchedData);
-        setLoading(false);
-      } catch (error) {
-        console.error("Failed to fetch transactions", error);
-        // Fallback to mock data if API is not running/fails
-        setTimeout(() => {
-          setTransactions(MOCK_TRANSACTIONS);
-          setLoading(false);
-        }, 800);
-      }
-    };
-    fetchTransactions();
+    fetchTransactions(true);
+    const interval = setInterval(() => {
+      fetchTransactions(false);
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleReversalSuccess = (id) => {
@@ -70,110 +70,136 @@ const TransactionMonitoringDashboard = () => {
 
   // Filter and Search Logic
   const filteredTransactions = transactions.filter(t => {
-    const matchesSearch = t.sender.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          t.receiver.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          t.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || t.status === statusFilter;
+    const s = (t.sender || '').toLowerCase();
+    const r = (t.receiver || '').toLowerCase();
+    const txId = (t.id || '').toLowerCase();
+    const q = searchTerm.toLowerCase();
+
+    const matchesSearch = s.includes(q) || r.includes(q) || txId.includes(q);
+    const matchesStatus = statusFilter === 'All' || (t.status || '').toLowerCase() === statusFilter.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
   // Pagination Logic
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / itemsPerPage));
   const paginatedTransactions = filteredTransactions.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 p-8 font-sans text-slate-200">
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8 font-sans text-slate-800">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-            Transaction Monitoring
-          </h1>
-          <p className="text-slate-400 mt-2">Live overview of all system-wide wallet transfers.</p>
+        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+                Transaction Monitoring
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                LIVE
+              </span>
+            </div>
+            <p className="text-slate-500 text-sm mt-1">Overall system monitoring view across all transaction lifecycles.</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Auto-refreshing every 3s</span>
+          </div>
         </div>
 
         {/* Controls Panel */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-slate-900 border border-slate-800 rounded-xl p-4 mb-6 shadow-xl backdrop-blur-md">
-          <div className="relative w-full md:w-96 mb-4 md:mb-0">
-            <svg className="absolute left-3 top-3 h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm gap-4">
+          <div className="relative w-full md:w-96">
+            <svg className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input 
               type="text" 
               placeholder="Search by ID, sender, receiver..." 
-              className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           
-          <div className="flex space-x-4">
+          <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
+            <span className="text-xs font-medium text-slate-500">Filter:</span>
             <select 
-              className="px-4 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer"
+              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer font-medium"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
-                setCurrentPage(1); // Reset page on filter
+                setCurrentPage(1);
               }}
             >
               <option value="All">All Statuses</option>
-              <option value="Pending">Pending</option>
               <option value="Completed">Completed</option>
               <option value="Held">Held</option>
+              <option value="PendingSecondApproval">Pending Second Approval</option>
+              <option value="Pending">Pending</option>
               <option value="Reversed">Reversed</option>
             </select>
           </div>
         </div>
 
         {/* Data Table */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 text-sm uppercase tracking-wider">
-                  <th className="p-4 font-semibold">Transaction ID</th>
-                  <th className="p-4 font-semibold">Sender</th>
-                  <th className="p-4 font-semibold">Receiver</th>
-                  <th className="p-4 font-semibold text-right">Amount (LKR)</th>
-                  <th className="p-4 font-semibold">Date / Time</th>
-                  <th className="p-4 font-semibold">Status</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold uppercase tracking-wider">
+                  <th className="p-4">Transaction ID</th>
+                  <th className="p-4">Sender</th>
+                  <th className="p-4">Receiver</th>
+                  <th className="p-4 text-right">Amount (LKR)</th>
+                  <th className="p-4 text-center">Risk Score</th>
+                  <th className="p-4">Date / Time</th>
+                  <th className="p-4">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
+              <tbody className="divide-y divide-slate-100 text-sm">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="p-12 text-center text-slate-500">
+                    <td colSpan="7" className="p-12 text-center text-slate-400">
                       <div className="flex justify-center items-center space-x-2">
-                        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                         <span>Loading transactions...</span>
                       </div>
                     </td>
                   </tr>
                 ) : paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="p-12 text-center text-slate-500">No transactions found matching your criteria.</td>
+                    <td colSpan="7" className="p-12 text-center text-slate-400">No transactions found matching your criteria.</td>
                   </tr>
                 ) : (
                   paginatedTransactions.map((tx) => (
                     <tr 
                       key={tx.id} 
                       onClick={() => setSelectedTransaction(tx)}
-                      className="hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                      className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
                     >
-                      <td className="p-4 font-mono text-sm text-blue-400 group-hover:text-blue-300">{tx.id}</td>
-                      <td className="p-4 text-slate-300">{tx.sender}</td>
-                      <td className="p-4 text-slate-300">{tx.receiver}</td>
-                      <td className="p-4 text-right font-medium text-slate-200">
-                        {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <td className="p-4 font-mono font-medium text-blue-600 group-hover:underline">{tx.id}</td>
+                      <td className="p-4 text-slate-700">{tx.sender}</td>
+                      <td className="p-4 text-slate-700">{tx.receiver}</td>
+                      <td className="p-4 text-right font-semibold text-slate-900">
+                        {Number(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4 text-slate-400 text-sm">
-                        {new Date(tx.timestamp).toLocaleString()}
+                      <td className="p-4 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                          tx.riskScore >= 70 ? 'bg-red-100 text-red-700' :
+                          tx.riskScore >= 40 ? 'bg-amber-100 text-amber-700' :
+                          'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {tx.riskScore || 0}/100
+                        </span>
+                      </td>
+                      <td className="p-4 text-slate-500 text-xs">
+                        {tx.timestamp ? new Date(tx.timestamp).toLocaleString() : 'N/A'}
                       </td>
                       <td className="p-4">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(tx.status)}`}>
+                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${getStatusColor(tx.status)}`}>
                           {tx.status}
                         </span>
                       </td>
@@ -186,22 +212,22 @@ const TransactionMonitoringDashboard = () => {
           
           {/* Pagination */}
           {!loading && totalPages > 1 && (
-            <div className="bg-slate-950 p-4 border-t border-slate-800 flex justify-between items-center">
-              <span className="text-sm text-slate-500">
+            <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-between items-center">
+              <span className="text-xs text-slate-500">
                 Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} of {filteredTransactions.length} entries
               </span>
               <div className="flex space-x-2">
                 <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 bg-slate-800 border border-slate-700 rounded-md text-sm hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Previous
                 </button>
                 <button 
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 bg-slate-800 border border-slate-700 rounded-md text-sm hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
                 </button>

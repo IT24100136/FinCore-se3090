@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { reviewService } from '../services/reviewService';
 import TransactionMap from '../components/TransactionMap';
@@ -39,6 +40,7 @@ import {
 } from 'lucide-react';
 
 export default function AnalystReviewPage() {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('review-queue'); // 'review-queue' | 'case-detail' | 'analytics' | 'audit-logs'
     const [queue, setQueue] = useState([]);
     const [selectedCase, setSelectedCase] = useState(null);
@@ -131,30 +133,11 @@ export default function AnalystReviewPage() {
             const allItems = data.items || [];
             // Prefer items that have valid queueCode and amount from real/seeded cases
             const validItems = allItems.filter(item => item.queueCode && item.queueCode.trim() !== '' && (Number(item.amount) > 0 || item.senderName));
-            const rawItems = validItems.length > 0 ? validItems : allItems;
-
-            // Auto-seed with prototype data if DB has no valid cases
-            if (rawItems.length === 0) {
-                try {
-                    await reviewService.seedTestData();
-                    const reseeded = await reviewService.getQueue();
-                    const reseededValid = (reseeded.items || []).filter(item => item.queueCode && item.queueCode.trim() !== '');
-                    const enriched = (reseededValid.length > 0 ? reseededValid : (reseeded.items || [])).map((item, index) => normalizeCase(item, index));
-                    setQueue(enriched);
-                    if (enriched.length > 0) {
-                        setSelectedCase(enriched[0]);
-                        loadHistory(enriched[0].transactionId);
-                    }
-                } catch (seedErr) {
-                    console.warn("Could not auto-seed, using client fallback", seedErr);
-                }
-            } else {
-                const enriched = rawItems.map((item, index) => normalizeCase(item, index));
-                setQueue(enriched);
-                if (enriched.length > 0 && !selectedCase) {
-                    setSelectedCase(enriched[0]);
-                    loadHistory(enriched[0].transactionId);
-                }
+            const enriched = validItems.map((item, index) => normalizeCase(item, index));
+            setQueue(enriched);
+            if (enriched.length > 0 && !selectedCase) {
+                setSelectedCase(enriched[0]);
+                loadHistory(enriched[0].transactionId);
             }
 
             // Fetch performance analytics
@@ -183,6 +166,15 @@ export default function AnalystReviewPage() {
 
     useEffect(() => {
         loadData();
+        const interval = setInterval(() => {
+            reviewService.getQueue().then(data => {
+                const allItems = data.items || [];
+                const validItems = allItems.filter(item => item.queueCode && item.queueCode.trim() !== '' && (Number(item.amount) > 0 || item.senderName));
+                const enriched = validItems.map((item, index) => normalizeCase(item, index));
+                setQueue(enriched);
+            }).catch(e => console.error("Silent queue refresh error:", e));
+        }, 3000);
+        return () => clearInterval(interval);
     }, []);
 
     const handleOpenCase = (item) => {
@@ -368,6 +360,21 @@ export default function AnalystReviewPage() {
                 {/* Navigation Items */}
                 <nav style={{ padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto' }}>
                     
+                    {/* 0. TRANSACTION MONITORING (All Transactions View) */}
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '0 12px 6px', letterSpacing: '0.6px' }}>
+                        MONITORING (All Transactions)
+                    </div>
+
+                    <button
+                        onClick={() => navigate('/admin/transactions')}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: '#38bdf8', backgroundColor: '#0f172a', border: '1px solid #1e3a8a', cursor: 'pointer', fontSize: '13px', fontWeight: 600, width: '100%', textAlign: 'left', marginBottom: '14px', transition: 'all 0.15s ease' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Activity size={18} /> Transaction Monitoring
+                        </div>
+                        <ArrowUpRight size={14} />
+                    </button>
+
                     {/* 1. FRAUD DETECTION (Engine) */}
                     <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '0 12px 8px', letterSpacing: '0.6px' }}>
                         FRAUD DETECTION (Engine)

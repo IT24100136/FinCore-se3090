@@ -47,7 +47,7 @@ logger = logging.getLogger("AnomalyDetectionAgent")
 
 # Baseline heuristic thresholds
 BASELINE_AMOUNT_THRESHOLD: float = 10000.0   # Spending spike trigger ($10,000 baseline)
-BASELINE_VELOCITY_THRESHOLD: int = 3         # Max normal transactions in 24 hours
+BASELINE_VELOCITY_THRESHOLD: int = 5         # Max normal transactions in 24 hours
 ANOMALY_SCORE_FLAG_THRESHOLD: float = 0.50   # Threshold above which transaction is flagged
 IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH: float = 900.0  # Max commercial aircraft velocity (~900 km/h)
 
@@ -195,7 +195,7 @@ def retrieve_extended_velocity_history(user_id: Optional[str], current_velocity_
     and average baseline spending intervals).
     """
     simulated_7d_count = max(current_velocity_24h * 3, current_velocity_24h + 2)
-    is_burst_pattern = current_velocity_24h >= 4
+    is_burst_pattern = current_velocity_24h >= 6
 
     return {
         "velocity_7d_total": simulated_7d_count,
@@ -353,10 +353,17 @@ def initial_signal_evaluation_node(state: AnomalyAgentState) -> Dict[str, Any]:
         logger.warning(f"[{tx_id}] Flagged: {signal}")
 
     # 3. Baseline Heuristic: Unrecognized Device Detection
-    is_new_device = (
-        device_id not in KNOWN_TRUSTED_DEVICES or
-        any(k in device_id.lower() for k in ["new", "unrecognized", "unknown", "spoofed", "emulator"])
+    is_known_device = (
+        device_id in KNOWN_TRUSTED_DEVICES or
+        device_id.startswith("mobile_device_usr_") or
+        device_id.startswith("mobile-fp-") or
+        device_id.startswith("usr_device_")
     )
+    is_suspicious_device = (
+        not device_id or
+        any(k in device_id.lower() for k in ["new", "unrecognized", "unknown", "spoofed", "emulator", "untrusted"])
+    )
+    is_new_device = (not is_known_device) or is_suspicious_device
     if is_new_device:
         signal = f"NEW_DEVICE: Device identifier '{device_id}' is unrecognized or newly encountered"
         flagged_signals.append(signal)

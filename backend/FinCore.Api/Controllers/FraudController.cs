@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FinCore.Api.Data;
 using FinCore.Api.Models;
 using FinCore.Api.Services.FraudService;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,14 +26,48 @@ namespace FinCore.Api.Controllers
         }
 
         // GET: api/fraud/flags
+        // Returns only transactions flagged as potentially fraudulent by the fraud/risk system
         [HttpGet("flags")]
         public async Task<IActionResult> GetFlags()
         {
             var flags = await _context.FraudFlags
+                .Where(f => f.Status == "Flagged" || f.RiskScore >= 40)
                 .OrderByDescending(f => f.CreatedAt)
                 .ToListAsync();
 
-            return Ok(flags);
+            var txIds = flags.Select(f => f.TransactionId).Distinct().ToList();
+            var txs = await _context.Transactions
+                .Where(t => txIds.Contains(t.Id))
+                .ToListAsync();
+
+            var refIds = txs.Select(t => t.ReferenceId).ToList();
+            var reviewItems = await _context.ReviewQueues
+                .Where(rq => refIds.Contains(rq.QueueCode))
+                .ToListAsync();
+
+            var enrichedFlags = flags.Select(f =>
+            {
+                var tx = txs.FirstOrDefault(t => t.Id == f.TransactionId);
+                var review = tx != null ? reviewItems.FirstOrDefault(r => r.QueueCode == tx.ReferenceId) : null;
+
+                return new
+                {
+                    id = f.Id,
+                    transactionId = f.TransactionId,
+                    referenceId = tx?.ReferenceId ?? $"TX-{f.TransactionId}",
+                    amount = tx?.Amount ?? (review?.Amount ?? 0m),
+                    senderName = review?.SenderName ?? (tx != null ? $"Wallet {tx.SenderWalletId}" : "Customer"),
+                    recipientName = review?.RecipientName ?? (tx != null && tx.ReceiverWalletId.HasValue ? $"Wallet {tx.ReceiverWalletId}" : "Recipient"),
+                    riskScore = f.RiskScore,
+                    reasons = f.Reasons,
+                    status = f.Status,
+                    createdAt = f.CreatedAt,
+                    originIp = review?.OriginIp ?? "127.0.0.1",
+                    device = review?.Device ?? "Mobile App"
+                };
+            });
+
+            return Ok(enrichedFlags);
         }
 
         // GET: api/fraud/flags/{id}
@@ -50,6 +85,7 @@ namespace FinCore.Api.Controllers
 
         // POST: api/fraud/rules
         [HttpPost("rules")]
+        [Authorize(Roles = "Admin,Analyst")]
         public async Task<IActionResult> CreateRule([FromBody] RuleThreshold rule)
         {
             if (!ModelState.IsValid)
@@ -62,6 +98,42 @@ namespace FinCore.Api.Controllers
             await _context.SaveChangesAsync();
 
             return StatusCode(StatusCodes.Status201Created, rule);
+        }
+
+        // PUT: api/fraud/rules/{id}
+        [HttpPut("rules/{id}")]
+        [Authorize(Roles = "Admin,Analyst")]
+        public async Task<IActionResult> UpdateRule(int id, [FromBody] RuleThreshold updated)
+        {
+            var existing = await _context.RuleThresholds.FindAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { message = $"Rule with ID {id} not found." });
+            }
+
+            existing.RuleName = updated.RuleName ?? existing.RuleName;
+            existing.ThresholdValue = updated.ThresholdValue;
+            existing.IsActive = updated.IsActive;
+            existing.LastUpdated = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return Ok(existing);
+        }
+
+        // DELETE: api/fraud/rules/{id}
+        [HttpDelete("rules/{id}")]
+        [Authorize(Roles = "Admin,Analyst")]
+        public async Task<IActionResult> DeleteRule(int id)
+        {
+            var existing = await _context.RuleThresholds.FindAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { message = $"Rule with ID {id} not found." });
+            }
+
+            _context.RuleThresholds.Remove(existing);
+            await _context.SaveChangesAsync();
+            return Ok(new { message = $"Rule {id} deleted successfully." });
         }
 
         // GET: api/fraud/rules

@@ -104,10 +104,11 @@ class ApprovalCoordinatorAgent:
         if assessment.is_outage_fallback:
             return await self._handle_circuit_breaker(assessment)
 
-        # Structuring patterns trigger immediate escalation regardless of numeric score
+        # Structuring patterns and Statutory Dual Approval (>= 75,000 LKR) trigger immediate escalation
         has_structuring = self._has_structuring_pattern(assessment.flag_reasons)
+        is_statutory = assessment.amount >= self.dual_approval_threshold
 
-        if assessment.risk_score >= self.high_risk_threshold or has_structuring:
+        if assessment.risk_score >= self.high_risk_threshold or has_structuring or is_statutory:
             return await self._escalate_to_analyst(assessment, structuring_detected=has_structuring)
         elif assessment.risk_score >= self.low_risk_threshold:
             return self._hold_for_step_up(assessment)

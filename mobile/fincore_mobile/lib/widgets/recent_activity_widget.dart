@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/held_transactions_screen.dart';
 import '../screens/transaction_history_screen.dart';
+import '../screens/transaction_status_screen.dart';
 
 class RecentActivityWidget extends StatelessWidget {
   final List<dynamic> transactions;
@@ -202,7 +203,23 @@ class RecentActivityWidget extends StatelessWidget {
       );
     }
 
-    return rowWidget;
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TransactionStatusScreen(
+              referenceId: tx['referenceId'] ?? '',
+              amount: amount.abs(),
+              recipient: tx['note'] ?? 'Transfer',
+              status: status,
+              riskScore: (tx['riskScore'] as num?)?.toInt(),
+            ),
+          ),
+        );
+      },
+      child: rowWidget,
+    );
   }
 
   Widget _buildBadge(String status) {

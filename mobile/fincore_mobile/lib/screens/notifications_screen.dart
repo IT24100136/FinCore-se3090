@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../models/notification_item.dart';
-import '../services/auth_service.dart';
 import '../widgets/notification_card.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -107,7 +106,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        bool isSubmitting = false;
         return StatefulBuilder(
           builder: (modalCtx, setModalState) {
             return Container(
@@ -202,9 +200,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     width: double.infinity,
                     height: 52,
                     child: OutlinedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () {
+                      onPressed: () {
                               Navigator.of(sheetContext).pop();
                               setState(() {
                                 item.isUnread = false;

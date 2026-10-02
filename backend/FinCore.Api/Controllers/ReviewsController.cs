@@ -124,15 +124,33 @@ namespace FinCore.Api.Controllers
         /// Persists an ApprovalDecision record (ApprovalLevel = 1).
         /// </summary>
         [HttpPost("{transactionId}/decide")]
-        public async Task<IActionResult> DecideCase(Guid transactionId, [FromBody] DecideRequest request)
+        public async Task<IActionResult> DecideCase(string transactionId, [FromBody] DecideRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Decision))
             {
                 return BadRequest(new { message = "Decision is required (e.g. Approved, Rejected)." });
             }
 
-            var item = await _context.ReviewQueues
-                .FirstOrDefaultAsync(q => q.TransactionId == transactionId || q.Id == transactionId);
+            ReviewQueue? item = null;
+            if (Guid.TryParse(transactionId, out var guidId))
+            {
+                item = await _context.ReviewQueues
+                    .FirstOrDefaultAsync(q => q.TransactionId == guidId || q.Id == guidId);
+            }
+
+            if (item == null && int.TryParse(transactionId, out var intId))
+            {
+                var relatedTx = await _context.Transactions.FirstOrDefaultAsync(t => t.Id == intId);
+                if (relatedTx != null)
+                {
+                    item = await _context.ReviewQueues.FirstOrDefaultAsync(q => q.QueueCode == relatedTx.ReferenceId);
+                }
+            }
+
+            if (item == null)
+            {
+                item = await _context.ReviewQueues.FirstOrDefaultAsync(q => q.QueueCode == transactionId);
+            }
 
             if (item == null)
             {
@@ -179,6 +197,12 @@ namespace FinCore.Api.Controllers
                         var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.ReceiverWalletId.Value);
                         if (rw != null) rw.Balance += tx.Amount;
                     }
+
+                    var flag = await _context.FraudFlags.FirstOrDefaultAsync(f => f.TransactionId == tx.Id);
+                    if (flag != null)
+                    {
+                        flag.Status = "Approved";
+                    }
                 }
             }
             else if (string.Equals(request.Decision, "Rejected", StringComparison.OrdinalIgnoreCase))
@@ -191,6 +215,12 @@ namespace FinCore.Api.Controllers
                     tx.Status = "Rejected";
                     var sw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.SenderWalletId);
                     if (sw != null) sw.Balance += tx.Amount;
+
+                    var flag = await _context.FraudFlags.FirstOrDefaultAsync(f => f.TransactionId == tx.Id);
+                    if (flag != null)
+                    {
+                        flag.Status = "Rejected";
+                    }
                 }
             }
             else
@@ -219,15 +249,23 @@ namespace FinCore.Api.Controllers
         /// Logs ApprovalDecision with ApprovalLevel = 2 and updates ReviewQueue.Status to 'Approved' or 'Rejected'.
         /// </summary>
         [HttpPost("{transactionId}/second-approval")]
-        public async Task<IActionResult> SecondApproval(Guid transactionId, [FromBody] SecondApprovalRequest request)
+        public async Task<IActionResult> SecondApproval(string transactionId, [FromBody] SecondApprovalRequest request)
         {
             if (request == null || request.SecondAnalystId == Guid.Empty)
             {
                 return BadRequest(new { message = "Valid SecondAnalystId is required." });
             }
 
-            var item = await _context.ReviewQueues
-                .FirstOrDefaultAsync(q => q.TransactionId == transactionId || q.Id == transactionId);
+            ReviewQueue? item = null;
+            if (Guid.TryParse(transactionId, out var guidId))
+            {
+                item = await _context.ReviewQueues
+                    .FirstOrDefaultAsync(q => q.TransactionId == guidId || q.Id == guidId);
+            }
+            if (item == null)
+            {
+                item = await _context.ReviewQueues.FirstOrDefaultAsync(q => q.QueueCode == transactionId);
+            }
 
             if (item == null)
             {
@@ -281,12 +319,24 @@ namespace FinCore.Api.Controllers
                         var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.ReceiverWalletId.Value);
                         if (rw != null) rw.Balance += tx.Amount;
                     }
+
+                    var flag = await _context.FraudFlags.FirstOrDefaultAsync(f => f.TransactionId == tx.Id);
+                    if (flag != null)
+                    {
+                        flag.Status = "Approved";
+                    }
                 }
                 else
                 {
                     tx.Status = "Rejected";
                     var sw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.SenderWalletId);
                     if (sw != null) sw.Balance += tx.Amount;
+
+                    var flag = await _context.FraudFlags.FirstOrDefaultAsync(f => f.TransactionId == tx.Id);
+                    if (flag != null)
+                    {
+                        flag.Status = "Rejected";
+                    }
                 }
             }
 
@@ -661,7 +711,8 @@ namespace FinCore.Api.Controllers
                     estimatedWaitMinutes = estimatedWaitMinutes,
                     priority = q.Priority,
                     priorityLabel = q.PriorityLabel,
-                    riskScore = q.RiskScore
+                    riskScore = q.RiskScore,
+                    flagReasons = q.FlagReasonsJson
                 };
             }).ToList();
 
@@ -670,6 +721,7 @@ namespace FinCore.Api.Controllers
             {
                 if (!resultItems.Any(i => i.transactionCode == tx.ReferenceId))
                 {
+                    var fFlag = await _context.FraudFlags.FirstOrDefaultAsync(f => f.TransactionId == tx.Id);
                     resultItems.Add(new
                     {
                         id = tx.Id.ToString(),
@@ -685,7 +737,8 @@ namespace FinCore.Api.Controllers
                         estimatedWaitMinutes = 10,
                         priority = tx.Amount >= 50000m ? 3 : 1,
                         priorityLabel = tx.Amount >= 50000m ? "HIGH" : "MEDIUM",
-                        riskScore = 40.0
+                        riskScore = fFlag != null ? (double)fFlag.RiskScore : 40.0,
+                        flagReasons = fFlag?.Reasons ?? (tx.Amount >= 75000m ? "Statutory Dual Approval Threshold (>75k LKR)" : "Standard Gateway Review")
                     });
                 }
             }

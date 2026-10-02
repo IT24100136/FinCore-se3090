@@ -81,6 +81,23 @@ class AuthService {
   static Future<Map<String, dynamic>> register({
     required String email,
     required String password,
+    String? name,
+    String? phoneNumber,
+    String? pin,
+    bool biometricEnabled = false,
+    DateTime? dateOfBirth,
+    String? address,
+    String? city,
+    String? postalCode,
+    String? idType,
+    String? idNumber,
+    String? idDocumentUrl,
+    String? selfieUrl,
+    String? bankAccountNumber,
+    String? bankRoutingCode,
+    String? cardNumber,
+    bool agreedToTerms = true,
+    bool marketingOptIn = false,
     String role = 'Customer',
   }) async {
     final response = await http.post(
@@ -89,16 +106,56 @@ class AuthService {
       body: jsonEncode({
         'email': email,
         'password': password,
+        'name': name,
+        'phoneNumber': phoneNumber,
+        'pin': pin,
+        'biometricEnabled': biometricEnabled,
+        'dateOfBirth': dateOfBirth?.toIso8601String(),
+        'address': address,
+        'city': city,
+        'postalCode': postalCode,
+        'idType': idType,
+        'idNumber': idNumber,
+        'idDocumentUrl': idDocumentUrl,
+        'selfieUrl': selfieUrl,
+        'bankAccountNumber': bankAccountNumber,
+        'bankRoutingCode': bankRoutingCode,
+        'cardNumber': cardNumber,
+        'agreedToTerms': agreedToTerms,
+        'marketingOptIn': marketingOptIn,
         'role': role,
       }),
     );
 
     final data = jsonDecode(response.body);
     if (response.statusCode == 200) {
+      if (data['token'] != null) {
+        await saveToken(data['token']);
+      }
       return {'success': true, 'data': data};
     } else {
       return {'success': false, 'message': data['message'] ?? 'Registration failed'};
     }
+  }
+
+  static Future<Map<String, dynamic>?> getProfile() async {
+    final token = await getToken();
+    if (token == null) return null;
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Error fetching user profile: $e');
+    }
+    return null;
   }
 
   static Future<Map<String, dynamic>> login({

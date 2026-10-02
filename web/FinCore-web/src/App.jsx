@@ -20,7 +20,7 @@ function App() {
           <Route path="/" element={<AnalystReviewPage />} />
           <Route path="/admin/transactions" element={<TransactionMonitoringDashboard />} />
           <Route path="/admin/analytics" element={<AnalyticsSummaryPage />} />
-          
+
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

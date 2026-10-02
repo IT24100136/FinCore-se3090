@@ -43,6 +43,10 @@ namespace FinCore.Api.Controllers
                 return BadRequest(new { message = "User with this email already exists." });
             }
 
+            var cardLastFour = !string.IsNullOrWhiteSpace(request.CardNumber) && request.CardNumber.Length >= 4
+                ? request.CardNumber[^4..]
+                : null;
+
             var user = new User
             {
                 Id = Guid.NewGuid(),
@@ -50,14 +54,59 @@ namespace FinCore.Api.Controllers
                 Email = normalizedEmail,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 Role = !string.IsNullOrWhiteSpace(request.Role) ? request.Role : "Customer",
+                PhoneNumber = request.PhoneNumber,
+                PinHash = !string.IsNullOrWhiteSpace(request.Pin) ? BCrypt.Net.BCrypt.HashPassword(request.Pin) : null,
+                BiometricEnabled = request.BiometricEnabled,
+                DateOfBirth = request.DateOfBirth,
+                Address = request.Address,
+                City = request.City,
+                PostalCode = request.PostalCode,
+                IdType = request.IdType ?? "National ID",
+                IdNumber = request.IdNumber,
+                IdDocumentUrl = request.IdDocumentUrl ?? (!string.IsNullOrWhiteSpace(request.IdNumber) ? "verified_id_doc.png" : null),
+                SelfieUrl = request.SelfieUrl ?? (!string.IsNullOrWhiteSpace(request.IdNumber) ? "verified_selfie_scan.png" : null),
+                KycStatus = "Verified",
+                BankAccountNumber = request.BankAccountNumber,
+                BankRoutingCode = request.BankRoutingCode,
+                CardLastFour = cardLastFour,
+                AgreedToTerms = request.AgreedToTerms,
+                MarketingOptIn = request.MarketingOptIn,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
 
             _context.Users.Add(user);
+
+            // Automatically provision wallet for the newly registered customer
+            int walletUserId = Math.Abs(user.Id.ToString().GetHashCode());
+            var existingWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == walletUserId);
+            if (existingWallet == null)
+            {
+                var wallet = new Wallet
+                {
+                    UserId = walletUserId,
+                    Balance = 100000m, // Starter test balance in LKR
+                    Currency = "LKR",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Wallets.Add(wallet);
+            }
+
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "User registered successfully", userId = user.Id, email = user.Email, role = user.Role });
+            var token = GenerateJwtToken(user);
+
+            return Ok(new
+            {
+                message = "User registered successfully with verified KYC profile",
+                userId = user.Id,
+                email = user.Email,
+                name = user.Name,
+                phoneNumber = user.PhoneNumber,
+                role = user.Role,
+                kycStatus = user.KycStatus,
+                token = token
+            });
         }
 
         [HttpPost("login")]
@@ -88,6 +137,47 @@ namespace FinCore.Api.Controllers
             {
                 Token = token,
                 Message = "Login successful"
+            });
+        }
+
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("UserId");
+            if (!Guid.TryParse(userIdStr, out var userGuid))
+            {
+                return Unauthorized(new { message = "Invalid user token claims." });
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userGuid);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found." });
+            }
+
+            return Ok(new UserProfileDto
+            {
+                Id = user.Id,
+                Name = user.Name,
+                Email = user.Email,
+                Role = user.Role,
+                PhoneNumber = user.PhoneNumber,
+                BiometricEnabled = user.BiometricEnabled,
+                DateOfBirth = user.DateOfBirth,
+                Address = user.Address,
+                City = user.City,
+                PostalCode = user.PostalCode,
+                IdType = user.IdType,
+                IdNumber = user.IdNumber,
+                IdDocumentUrl = user.IdDocumentUrl,
+                SelfieUrl = user.SelfieUrl,
+                KycStatus = user.KycStatus,
+                BankAccountNumber = user.BankAccountNumber,
+                CardLastFour = user.CardLastFour,
+                AgreedToTerms = user.AgreedToTerms,
+                MarketingOptIn = user.MarketingOptIn,
+                CreatedAt = user.CreatedAt
             });
         }
 

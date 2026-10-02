@@ -31,6 +31,12 @@ export default function FraudFlagList({ onSelectFlag, onOpenTrends, onOpenRules 
 
   useEffect(() => {
     loadFlags();
+    const interval = setInterval(() => {
+      fraudService.getFlags().then(data => {
+        setFlags(data);
+      }).catch(err => console.error('Silent refresh flags error:', err));
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadFlags = async () => {

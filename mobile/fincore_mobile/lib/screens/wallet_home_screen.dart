@@ -21,6 +21,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
   // --- State ---
   double _balance = 0.0;
   List<dynamic> _transactions = [];
+  double _monthlySpent = 0.0;
+  double _monthlyReceived = 0.0;
   bool _isLoading = true;
 
   // --- Static display data ---
@@ -37,10 +39,45 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
     setState(() => _isLoading = true);
     try {
       final balance = await _walletService.getBalance();
-      final historyResult = await _walletService.getHistory(pageSize: 5);
+      final historyResult = await _walletService.getHistory(pageSize: 50);
+      final list = (historyResult['data'] as List<dynamic>?) ?? [];
+
+      final now = DateTime.now();
+      final currentMonthTxs = list.where((t) {
+        if (t['timestamp'] == null) return true;
+        try {
+          final dt = DateTime.parse(t['timestamp'].toString());
+          return dt.year == now.year && dt.month == now.month;
+        } catch (_) {
+          return true;
+        }
+      }).toList();
+
+      // Only COMPLETED transactions count toward actual spent/received
+      final completedTxs = currentMonthTxs.where((t) {
+        final status = (t['status'] ?? '').toString().toUpperCase();
+        return status == 'COMPLETED';
+      });
+
+      final spent = completedTxs
+          .where((t) => t['direction'] == 'debit' || ((t['displayAmount'] as num?) ?? 0) < 0)
+          .fold<double>(0, (sum, t) {
+            final amt = ((t['displayAmount'] as num?)?.toDouble() ?? (t['amount'] as num?)?.toDouble() ?? 0).abs();
+            return sum + amt;
+          });
+
+      final received = completedTxs
+          .where((t) => t['direction'] == 'credit' || (((t['displayAmount'] as num?) ?? 0) > 0 && t['direction'] != 'debit'))
+          .fold<double>(0, (sum, t) {
+            final amt = ((t['displayAmount'] as num?)?.toDouble() ?? (t['amount'] as num?)?.toDouble() ?? 0).abs();
+            return sum + amt;
+          });
+
       setState(() {
         _balance = balance;
-        _transactions = historyResult['data'] as List<dynamic>;
+        _transactions = list.take(5).toList();
+        _monthlySpent = spent;
+        _monthlyReceived = received;
         _isLoading = false;
       });
     } catch (e) {
@@ -557,19 +594,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
   }
 
   Widget _buildSummaryRow() {
-    final spent = _transactions
-        .where((t) => (t['amount'] as num) < 0)
-        .fold<double>(0, (sum, t) => sum + (t['amount'] as num).abs());
-    final received = _transactions
-        .where((t) => (t['amount'] as num) > 0)
-        .fold<double>(0, (sum, t) => sum + (t['amount'] as num).toDouble());
-
     return Row(
       children: [
         Expanded(
           child: _buildSummaryCard(
             label: 'SPENT THIS MONTH',
-            value: 'Rs. ${_fmt(spent)}',
+            value: 'Rs. ${_fmt(_monthlySpent)}',
             valueColor: const Color(0xFFE53935),
           ),
         ),
@@ -577,7 +607,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
         Expanded(
           child: _buildSummaryCard(
             label: 'RECEIVED',
-            value: 'Rs. ${_fmt(received)}',
+            value: 'Rs. ${_fmt(_monthlyReceived)}',
             valueColor: const Color(0xFF2E7D32),
           ),
         ),

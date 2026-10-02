@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'wallet_home_screen.dart';
+import 'registration_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -194,24 +195,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 14),
                       // Forgot / Switch
                       Center(
-                        child: TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _isSignInMode = !_isSignInMode;
-                              _errorMessage = null;
-                              _successMessage = null;
-                            });
-                          },
-                          child: Text(
-                            _isSignInMode
-                                ? 'Forgot password?'
-                                : 'Already have an account? Sign In',
-                            style: const TextStyle(
-                              color: _accentBlue,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                        child: Column(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RegistrationScreen()),
+                                );
+                              },
+                              child: const Text(
+                                "Don't have an account? Create Wallet (KYC)",
+                                style: TextStyle(
+                                  color: _accentBlue,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ],
@@ -318,19 +320,12 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Row(
         children: [
-          _buildTab('Sign In', isActive: _isSignInMode, onTap: () {
-            setState(() {
-              _isSignInMode = true;
-              _errorMessage = null;
-              _successMessage = null;
-            });
-          }),
-          _buildTab('Register', isActive: !_isSignInMode, onTap: () {
-            setState(() {
-              _isSignInMode = false;
-              _errorMessage = null;
-              _successMessage = null;
-            });
+          _buildTab('Sign In', isActive: true, onTap: () {}),
+          _buildTab('Register (KYC)', isActive: false, onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RegistrationScreen()),
+            );
           }),
         ],
       ),

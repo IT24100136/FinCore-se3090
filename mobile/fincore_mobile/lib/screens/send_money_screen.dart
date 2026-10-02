@@ -53,7 +53,9 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
             referenceId: result['referenceId'] ?? 'N/A',
             amount: (result['amount'] as num?)?.toDouble() ?? _currentAmount,
             recipient: result['recipient'] ?? recipient,
-            status: result['status'] ?? 'Pending',
+            status: result['status'] ?? 'Completed',
+            riskScore: (result['riskScore'] as num?)?.toInt(),
+            message: result['message'] as String?,
           ),
         ),
       );

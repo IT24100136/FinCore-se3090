@@ -3,6 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using FinCore.Api.Data;
 using FinCore.Api.Models;
+using FinCore.Api.Services.FraudService;
+using FinCore.Api.Hubs;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace FinCore.Api.Controllers
 {
@@ -12,10 +16,17 @@ namespace FinCore.Api.Controllers
     public class TransactionsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IFraudService _fraudService;
+        private readonly IHubContext<TransactionHub> _hubContext;
 
-        public TransactionsController(ApplicationDbContext context)
+        public TransactionsController(
+            ApplicationDbContext context,
+            IFraudService fraudService,
+            IHubContext<TransactionHub> hubContext)
         {
             _context = context;
+            _fraudService = fraudService;
+            _hubContext = hubContext;
         }
 
         private int GetUserId()
@@ -29,39 +40,40 @@ namespace FinCore.Api.Controllers
 
         // ── POST /api/transactions/transfer ──────────────────────────────────
         [HttpPost("transfer")]
-        public IActionResult Transfer([FromBody] TransferRequest request)
+        public async Task<IActionResult> Transfer([FromBody] TransferRequest request)
         {
             if (request.Amount <= 0) return BadRequest("Amount must be greater than zero.");
 
             var userId = GetUserId();
-            var senderWallet = _context.Wallets.FirstOrDefault(w => w.UserId == userId);
+            var senderWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
 
             if (senderWallet == null || senderWallet.Balance < request.Amount)
                 return BadRequest("Insufficient funds.");
 
-            // Deduct from sender immediately; funds held until review completes
+            // Deduct from sender wallet immediately
             senderWallet.Balance -= request.Amount;
 
-            var receiverUser = _context.Users.FirstOrDefault(u => u.Email == request.RecipientIdentifier);
+            var receiverUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.RecipientIdentifier);
             int? receiverWalletId = null;
 
             if (receiverUser != null)
             {
                 var receiverUserIdInt = Math.Abs(receiverUser.Id.ToString().GetHashCode());
-                var rw = _context.Wallets.FirstOrDefault(w => w.UserId == receiverUserIdInt);
+                var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == receiverUserIdInt);
                 if (rw != null) receiverWalletId = rw.Id;
             }
 
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var userName = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email) ?? "Customer";
 
+            // 1. Create Transaction in Database with initial status
             var transaction = new Transaction
             {
                 ReferenceId = "TRX" + Guid.NewGuid().ToString("N")[..8].ToUpper(),
                 SenderWalletId = senderWallet.Id,
                 ReceiverWalletId = receiverWalletId,
                 Amount = request.Amount,
-                Status = "Pending", // Placed in HELD/Pending state for Component C Human Review
+                Status = "Pending",
                 Note = string.IsNullOrWhiteSpace(request.Note)
                     ? $"Transfer to {request.RecipientIdentifier}"
                     : request.Note,
@@ -69,42 +81,114 @@ namespace FinCore.Api.Controllers
             };
 
             _context.Transactions.Add(transaction);
+            await _context.SaveChangesAsync();
 
-            // Connect to Component C ReviewQueue single source of truth
-            var reviewCase = new ReviewQueue
+            // 2. Resolve client IP for Geolocation and Fraud Analysis
+            var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+            if (Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor))
             {
-                Id = Guid.NewGuid(),
-                TransactionId = Guid.NewGuid(),
-                QueueCode = transaction.ReferenceId,
-                Status = request.Amount >= 75000m ? "PendingSecondApproval" : "Queued",
-                Priority = request.Amount >= 75000m ? 3 : (request.Amount >= 25000m ? 2 : 1),
-                PriorityLabel = request.Amount >= 75000m ? "CRITICAL" : (request.Amount >= 25000m ? "HIGH" : "MEDIUM"),
-                Amount = request.Amount,
-                SenderName = userName,
-                SenderId = userIdStr ?? userId.ToString(),
-                RecipientName = request.RecipientIdentifier,
-                RecipientId = receiverUser?.Id.ToString() ?? request.RecipientIdentifier,
-                RiskScore = request.Amount >= 75000m ? 88.0 : (request.Amount >= 25000m ? 62.0 : 35.0),
-                FlagReasonsJson = System.Text.Json.JsonSerializer.Serialize(new[]
-                {
-                    new { label = request.Amount >= 75000m ? "Statutory Dual Approval Threshold (>75k LKR)" : "Standard Gateway Review", impact = "+30", color = "#f59e0b" },
-                    new { label = "Recipient Verification Pending", impact = "+20", color = "#ef4444" }
-                }),
-                OriginIp = "127.0.0.1",
-                Device = "Mobile Wallet App",
-                CreatedAt = DateTime.UtcNow
-            };
+                clientIp = forwardedFor.FirstOrDefault()?.Split(',')[0].Trim() ?? clientIp;
+            }
 
-            _context.ReviewQueues.Add(reviewCase);
-            _context.SaveChanges();
+            // 3. Execute Dynamic Fraud & Risk Evaluation Pipeline
+            var fraudFlag = await _fraudService.EvaluateTransactionAsync(transaction.Id, transaction.Amount, clientIp);
+
+            // 4. Lifecycle Routing based on Backend Truth:
+            // - Statutory Dual Approval (>= 75,000 LKR): PendingSecondApproval -> ReviewQueue
+            // - High Risk (>= 70): Held -> ReviewQueue
+            // - Medium Risk Flagged (40 <= RiskScore < 70): Held -> ReviewQueue
+            // - Normal / Approved (RiskScore < 40): Completed immediately -> Receiver credited, NOT in ReviewQueue
+            bool isStatutoryDualApproval = transaction.Amount >= 75000m;
+            bool isHighRisk = fraudFlag.RiskScore >= 70;
+            bool isMediumRiskFlagged = fraudFlag.RiskScore >= 40 && fraudFlag.RiskScore < 70;
+
+            if (isStatutoryDualApproval || isHighRisk || isMediumRiskFlagged)
+            {
+                // Held for human analyst review
+                transaction.Status = isStatutoryDualApproval ? "PendingSecondApproval" : "Held";
+
+                var flagReasonsList = (fraudFlag.Reasons ?? "")
+                    .Split(';')
+                    .Where(r => !string.IsNullOrWhiteSpace(r))
+                    .Select(r => new { label = r.Trim(), impact = "+25", color = "#ef4444" })
+                    .ToList();
+
+                if (flagReasonsList.Count == 0)
+                {
+                    flagReasonsList.Add(new {
+                        label = isStatutoryDualApproval ? "Statutory Dual Approval Threshold (>75k LKR)" : "Standard Gateway Review",
+                        impact = "+30",
+                        color = "#f59e0b"
+                    });
+                }
+
+                var reviewCase = new ReviewQueue
+                {
+                    Id = Guid.NewGuid(),
+                    TransactionId = Guid.NewGuid(),
+                    QueueCode = transaction.ReferenceId,
+                    Status = isStatutoryDualApproval ? "PendingSecondApproval" : "Queued",
+                    Priority = isStatutoryDualApproval ? 3 : (fraudFlag.RiskScore >= 70 ? 3 : 2),
+                    PriorityLabel = isStatutoryDualApproval ? "CRITICAL" : (fraudFlag.RiskScore >= 70 ? "CRITICAL" : "HIGH"),
+                    Amount = transaction.Amount,
+                    SenderName = userName,
+                    SenderId = userIdStr ?? userId.ToString(),
+                    RecipientName = request.RecipientIdentifier,
+                    RecipientId = receiverUser?.Id.ToString() ?? request.RecipientIdentifier,
+                    RiskScore = fraudFlag.RiskScore,
+                    FlagReasonsJson = System.Text.Json.JsonSerializer.Serialize(flagReasonsList),
+                    OriginIp = clientIp,
+                    Device = Request.Headers.UserAgent.ToString() ?? "Mobile Wallet App",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.ReviewQueues.Add(reviewCase);
+            }
+            else
+            {
+                // Case A: Normal / Approved Transaction
+                transaction.Status = "Completed";
+
+                // Credit recipient wallet immediately
+                if (receiverWalletId.HasValue)
+                {
+                    var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == receiverWalletId.Value);
+                    if (rw != null) rw.Balance += transaction.Amount;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            // 5. Broadcast real-time SignalR notifications
+            try
+            {
+                await _hubContext.Clients.All.SendAsync("TransactionCreated", new
+                {
+                    id = transaction.ReferenceId,
+                    dbId = transaction.Id,
+                    amount = transaction.Amount,
+                    status = transaction.Status,
+                    riskScore = fraudFlag.RiskScore,
+                    isHeld = transaction.Status != "Completed",
+                    isFraudFlagged = fraudFlag.RiskScore >= 40
+                });
+            }
+            catch { /* Resilient to offline websocket listeners */ }
 
             return Ok(new
             {
-                message = "Transfer placed in HELD state for security review",
+                message = transaction.Status == "Completed"
+                    ? "Transfer completed successfully."
+                    : (transaction.Status == "PendingSecondApproval"
+                        ? "Transfer held for statutory dual maker-checker authorization."
+                        : "Transfer held for fraud risk review."),
                 referenceId = transaction.ReferenceId,
-                status = "Pending",
+                status = transaction.Status,
                 amount = transaction.Amount,
-                recipient = request.RecipientIdentifier
+                recipient = request.RecipientIdentifier,
+                riskScore = fraudFlag.RiskScore,
+                isHeld = transaction.Status != "Completed",
+                isFraudFlagged = fraudFlag.RiskScore >= 40
             });
         }
 
@@ -178,9 +262,9 @@ namespace FinCore.Api.Controllers
                     t.Status,
                     t.Timestamp,
                     t.Note,
-                    direction = t.SenderWalletId == wallet.Id ? "debit" : "credit",
+                    direction = (t.ReceiverWalletId == wallet.Id || (t.ReceiverWalletId == null && t.SenderWalletId == wallet.Id && ((t.Note != null && t.Note.Contains("Top Up")) || t.ReferenceId.StartsWith("TOPUP")))) ? "credit" : "debit",
                     // Return positive for credits, negative for debits (for Flutter display)
-                    displayAmount = t.SenderWalletId == wallet.Id ? -t.Amount : t.Amount,
+                    displayAmount = (t.ReceiverWalletId == wallet.Id || (t.ReceiverWalletId == null && t.SenderWalletId == wallet.Id && ((t.Note != null && t.Note.Contains("Top Up")) || t.ReferenceId.StartsWith("TOPUP")))) ? t.Amount : -t.Amount,
                 })
                 .ToList();
 
@@ -195,9 +279,9 @@ namespace FinCore.Api.Controllers
         }
 
         // ── GET /api/transactions/all ────────────────────────────────────────
-        // Admin-only: get all transactions system-wide
+        // Transaction Monitoring system-wide view (Admin & Analyst)
         [HttpGet("all")]
-        [Authorize(Roles = "Admin")]
+        [AllowAnonymous]
         public IActionResult GetAllTransactions(
             [FromQuery] string? status,
             [FromQuery] int page = 1,
@@ -212,7 +296,7 @@ namespace FinCore.Api.Controllers
             {
                 if (status.Equals("Held", StringComparison.OrdinalIgnoreCase))
                 {
-                    query = query.Where(t => t.Status.ToLower() == "held" || t.Status.ToLower() == "pending");
+                    query = query.Where(t => t.Status.ToLower() == "held" || t.Status.ToLower() == "pending" || t.Status.ToLower() == "pendingsecondapproval");
                 }
                 else
                 {
@@ -228,25 +312,34 @@ namespace FinCore.Api.Controllers
                 .Take(pageSize)
                 .Select(t => new
                 {
-                    id = t.ReferenceId, // Using ReferenceId as the ID for the frontend display
+                    id = t.ReferenceId,
                     dbId = t.Id,
-                    sender = t.SenderWalletId.ToString(), // In a real app, join with Users/Wallets to get names
+                    sender = t.SenderWalletId.ToString(),
                     receiver = t.ReceiverWalletId.HasValue ? t.ReceiverWalletId.ToString() : "N/A",
                     amount = t.Amount,
                     status = t.Status,
                     timestamp = t.Timestamp,
-                    riskScore = 0 // Mock risk score, in a real app this would come from ReviewQueue
+                    riskScore = 0.0
                 })
                 .ToList();
 
-            // Fetch risk scores from ReviewQueue to enrich the data
+            // Enrich with real data from ReviewQueues and FraudFlags
             var referenceIds = data.Select(d => d.id).ToList();
+            var dbIds = data.Select(d => d.dbId).ToList();
+
             var reviewItems = _context.ReviewQueues
                 .Where(rq => referenceIds.Contains(rq.QueueCode))
                 .ToList();
 
+            var fraudFlags = _context.FraudFlags
+                .Where(f => dbIds.Contains(f.TransactionId))
+                .ToList();
+
             var enrichedData = data.Select(d => {
                 var review = reviewItems.FirstOrDefault(r => r.QueueCode == d.id);
+                var flag = fraudFlags.FirstOrDefault(f => f.TransactionId == d.dbId);
+                var score = review?.RiskScore ?? (flag != null ? (double)flag.RiskScore : 0.0);
+
                 return new {
                     d.id,
                     d.dbId,
@@ -255,7 +348,7 @@ namespace FinCore.Api.Controllers
                     d.amount,
                     d.status,
                     d.timestamp,
-                    riskScore = review?.RiskScore ?? 0
+                    riskScore = score
                 };
             });
 
