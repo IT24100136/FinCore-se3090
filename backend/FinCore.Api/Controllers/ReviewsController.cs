@@ -203,6 +203,24 @@ namespace FinCore.Api.Controllers
                     {
                         flag.Status = "Approved";
                     }
+
+                    var sw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == tx.SenderWalletId);
+                    if (sw != null)
+                    {
+                        _context.Notifications.Add(new Notification
+                        {
+                            UserId = sw.UserId,
+                            Recipient = item.SenderName,
+                            RecipientName = item.SenderName,
+                            Title = "Transfer Approved",
+                            Message = $"Your transfer of Rs. {tx.Amount:N2} to {item.RecipientName} has been approved.",
+                            DeliveryStatus = "Sent",
+                            ChannelDetails = "Analyst Review Console",
+                            Category = "paymentSuccess",
+                            IsRead = false,
+                            Timestamp = DateTime.UtcNow
+                        });
+                    }
                 }
             }
             else if (string.Equals(request.Decision, "Rejected", StringComparison.OrdinalIgnoreCase))
@@ -220,6 +238,23 @@ namespace FinCore.Api.Controllers
                     if (flag != null)
                     {
                         flag.Status = "Rejected";
+                    }
+
+                    if (sw != null)
+                    {
+                        _context.Notifications.Add(new Notification
+                        {
+                            UserId = sw.UserId,
+                            Recipient = item.SenderName,
+                            RecipientName = item.SenderName,
+                            Title = "Transfer Rejected",
+                            Message = $"Your transfer of Rs. {tx.Amount:N2} was rejected by fraud compliance and the funds have been returned to your wallet.",
+                            DeliveryStatus = "Sent",
+                            ChannelDetails = "Analyst Review Console",
+                            Category = "accountWarning",
+                            IsRead = false,
+                            Timestamp = DateTime.UtcNow
+                        });
                     }
                 }
             }
@@ -712,7 +747,7 @@ namespace FinCore.Api.Controllers
                     priority = q.Priority,
                     priorityLabel = q.PriorityLabel,
                     riskScore = q.RiskScore,
-                    flagReasons = q.FlagReasonsJson
+                    flagReasons = q.FlagReasonsJson ?? string.Empty
                 };
             }).ToList();
 

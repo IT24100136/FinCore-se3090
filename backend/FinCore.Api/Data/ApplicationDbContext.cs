@@ -21,5 +21,7 @@ namespace FinCore.Api.Data
         public DbSet<Wallet> Wallets { get; set; }
         public DbSet<Transaction> Transactions { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<AgentExecutionLog> AgentExecutionLogs { get; set; }
+        public DbSet<RuleAuditLog> RuleAuditLogs { get; set; }
     }
 }

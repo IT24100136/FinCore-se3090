@@ -7,6 +7,11 @@ import RuleConfigurationPanel from '../components/fraud/RuleConfigurationPanel';
 import FraudFlagList from '../components/fraud/FraudFlagList';
 import FlagDetailBreakdown from '../components/fraud/FlagDetailBreakdown';
 import FlaggingTrendsDashboard from '../components/fraud/FlaggingTrendsDashboard';
+import AnalystPerformanceDashboard from '../components/analyst/AnalystPerformanceDashboard';
+import DecisionHistoryTable from '../components/analyst/DecisionHistoryTable';
+import FinancialReversalsPage from './admin/FinancialReversalsPage';
+import TransactionMonitoringDashboard from './admin/TransactionMonitoringDashboard';
+import { useAuth } from '../context/AuthContext';
 import {
     LayoutDashboard,
     Inbox,
@@ -41,6 +46,8 @@ import {
 
 export default function AnalystReviewPage() {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'Admin';
     const [activeTab, setActiveTab] = useState('review-queue'); // 'review-queue' | 'case-detail' | 'analytics' | 'audit-logs'
     const [queue, setQueue] = useState([]);
     const [selectedCase, setSelectedCase] = useState(null);
@@ -359,7 +366,7 @@ export default function AnalystReviewPage() {
 
                 {/* Navigation Items */}
                 <nav style={{ padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto' }}>
-                    
+
                     {/* 0. TRANSACTION MONITORING (All Transactions View) */}
                     <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '0 12px 6px', letterSpacing: '0.6px' }}>
                         MONITORING (All Transactions)
@@ -465,24 +472,28 @@ export default function AnalystReviewPage() {
                         <FileCheck2 size={18} /> Audit Trails & History
                     </button>
 
-                    {/* 3. FINANCIAL CORE (Ledger & Admin - S1) */}
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>
-                        FINANCIAL CORE (Ledger & Admin - S1)
-                    </div>
+                    {/* 3. FINANCIAL CORE & LEDGER (Admin Only - S1) */}
+                    {isAdmin && (
+                        <>
+                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>
+                                FINANCIAL CORE &amp; LEDGER (ADMIN)
+                            </div>
 
-                    <button
-                        onClick={() => setActiveTab('transaction-monitor')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'transaction-monitor' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'transaction-monitor' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
-                    >
-                        <Activity size={18} /> Transaction Monitor
-                    </button>
+                            <button
+                                onClick={() => setActiveTab('transaction-monitor')}
+                                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'transaction-monitor' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'transaction-monitor' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                            >
+                                <Activity size={18} /> Transaction Monitor
+                            </button>
 
-                    <button
-                        onClick={() => setActiveTab('reversals')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'reversals' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'reversals' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
-                    >
-                        <RotateCcw size={18} /> Reversals Action
-                    </button>
+                            <button
+                                onClick={() => setActiveTab('reversals')}
+                                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'reversals' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'reversals' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                            >
+                                <RotateCcw size={18} /> Reversal Action
+                            </button>
+                        </>
+                    )}
                 </nav>
 
                 {/* Bottom User Profile */}
@@ -1326,181 +1337,35 @@ export default function AnalystReviewPage() {
                     )}
 
                     {/* ============================================================== */}
-                    {/* TAB: ANALYTICS & ADMIN PERFORMANCE (User Story 5)              */}
+                    {/* TAB: ANALYTICS & ADMIN PERFORMANCE (Deliverable 7)             */}
                     {/* ============================================================== */}
                     {activeTab === 'analytics' && (
-                        <div>
-                            <div style={{ marginBottom: '24px' }}>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: 500 }}>Admin &gt; Performance Analytics</div>
-                                <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                                    Analyst Performance & Review Quality Dashboard
-                                </h1>
-                                <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
-                                    Live metrics tracking analyst efficiency, decision turnaround times, and approval/rejection rates.
-                                </p>
-                            </div>
-
-                            {/* Key Performance Indicators */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Avg Decision Time</span>
-                                        <Clock size={18} color="#2563eb" />
-                                    </div>
-                                    <div style={{ fontSize: '30px', fontWeight: 800, color: '#0f172a' }}>
-                                        {metrics.averageDecisionTimeMinutes || 4.2} <span style={{ fontSize: '16px', fontWeight: 600, color: '#64748b' }}>min</span>
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '4px', fontWeight: 600 }}>
-                                        ✓ Well within SLA target (15 min)
-                                    </div>
-                                </div>
-
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Approval Rate</span>
-                                        <CheckCircle size={18} color="#16a34a" />
-                                    </div>
-                                    <div style={{ fontSize: '30px', fontWeight: 800, color: '#16a34a' }}>
-                                        {metrics.approvalRate || 0}%
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                                        {metrics.approvedCount || 0} approved cases
-                                    </div>
-                                </div>
-
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Rejection Rate</span>
-                                        <XCircle size={18} color="#dc2626" />
-                                    </div>
-                                    <div style={{ fontSize: '30px', fontWeight: 800, color: '#dc2626' }}>
-                                        {metrics.rejectionRate || 0}%
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                                        {metrics.rejectedCount || 0} blocked fraudulent cases
-                                    </div>
-                                </div>
-
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Total Processed</span>
-                                        <Activity size={18} color="#d97706" />
-                                    </div>
-                                    <div style={{ fontSize: '30px', fontWeight: 800, color: '#0f172a' }}>
-                                        {metrics.decidedCases || 0}
-                                    </div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                                        {metrics.pendingCases || 0} pending analyst action
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Detailed Analytics Grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                                {/* Maker-Checker Principle & Governance */}
-                                <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <ShieldCheck size={20} color="#16a34a" /> Maker-Checker Compliance
-                                    </h3>
-                                    <div style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6, marginBottom: '16px' }}>
-                                        All transactions $\ge$ Rs. 75,000 strictly enforce dual-approval separation of duties. No single analyst can approve and release funds alone.
-                                    </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-                                            <span>Cases Pending Second Approval:</span>
-                                            <strong style={{ color: '#d97706' }}>{queue.filter(q => q.status === 'PendingSecondApproval').length}</strong>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-                                            <span>Escalated for Admin Intervention:</span>
-                                            <strong style={{ color: '#dc2626' }}>{metrics.escalatedCount || 0}</strong>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-                                            <span>Clarifications / Info Requested:</span>
-                                            <strong style={{ color: '#0284c7' }}>{metrics.infoRequestedCount || 0}</strong>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Analyst Roster Efficiency */}
-                                <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-                                        Review Quality & SLA Adherence
-                                    </h3>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-                                        <div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                <span style={{ color: '#475569' }}>High-Risk SLA Resolution (&lt; 15 min):</span>
-                                                <strong style={{ color: '#16a34a' }}>96.8%</strong>
-                                            </div>
-                                            <div style={{ width: '100%', height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
-                                                <div style={{ width: '96.8%', height: '100%', backgroundColor: '#16a34a', borderRadius: '3px' }} />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                <span style={{ color: '#475569' }}>Analyst Note Completeness:</span>
-                                                <strong style={{ color: '#2563eb' }}>100%</strong>
-                                            </div>
-                                            <div style={{ width: '100%', height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px' }}>
-                                                <div style={{ width: '100%', height: '100%', backgroundColor: '#2563eb', borderRadius: '3px' }} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <AnalystPerformanceDashboard
+                            metrics={metrics}
+                            queue={queue}
+                        />
                     )}
 
                     {/* ============================================================== */}
-                    {/* TAB: AUDIT TRAILS & FULL HISTORY (User Story 4)                 */}
+                    {/* TAB: AUDIT TRAILS & FULL HISTORY (Deliverable 8)               */}
                     {/* ============================================================== */}
                     {activeTab === 'audit-logs' && (
-                        <div>
-                            <div style={{ marginBottom: '24px' }}>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: 500 }}>Admin &gt; Audit Trails</div>
-                                <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                                    Full Decision History & Governance Audit Trail
-                                </h1>
-                                <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
-                                    Complete immutable decision records providing complete traceability for regulatory audits.
-                                </p>
-                            </div>
+                        <DecisionHistoryTable
+                            queue={queue}
+                            onRefresh={loadData}
+                            onOpenCase={handleOpenCase}
+                        />
+                    )}
 
-                            <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>Recent Case Decision Logs</h3>
-                                    <button
-                                        onClick={loadData}
-                                        style={{ padding: '6px 12px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                                    >
-                                        Refresh Log
-                                    </button>
-                                </div>
+                    {/* ============================================================== */}
+                    {/* TAB: TRANSACTION MONITOR & REVERSALS (Admin Ledger)             */}
+                    {/* ============================================================== */}
+                    {activeTab === 'transaction-monitor' && (
+                        <TransactionMonitoringDashboard />
+                    )}
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                    {queue.map((item, idx) => (
-                                        <div key={idx} style={{ padding: '14px 18px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <span style={{ fontWeight: 700, color: '#2563eb' }}>{item.queueId}</span>
-                                                    <span style={{ fontWeight: 600, color: '#0f172a' }}>{item.customerName}</span>
-                                                    <span style={{ color: '#64748b', fontSize: '12px' }}>• Rs. {item.amount.toLocaleString()}</span>
-                                                </div>
-                                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                                                    Assigned: {item.assignedAnalyst} | Status: <strong style={{ color: '#0f172a' }}>{item.status}</strong>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleOpenCase(item)}
-                                                style={{ backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                                            >
-                                                View Case Audit
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
+                    {activeTab === 'reversals' && (
+                        <FinancialReversalsPage />
                     )}
 
                     {/* ============================================================== */}
@@ -1524,8 +1389,13 @@ export default function AnalystReviewPage() {
                         <FlagDetailBreakdown
                             flag={selectedFraudFlag}
                             onBack={() => setActiveTab('fraud-flags')}
-                            onDecisionSubmitted={() => {
-                                loadData();
+                            onNavigateToCase={(caseId) => {
+                                const found = queue.find(q => q.queueId === caseId || q.transactionId === caseId || String(q.id) === String(caseId));
+                                if (found) {
+                                    handleOpenCase(found);
+                                } else {
+                                    setActiveTab('review-queue');
+                                }
                             }}
                         />
                     )}

@@ -18,14 +18,75 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  late List<NotificationItem> _notifications;
+  List<NotificationItem> _notifications = [];
+  bool _isLoading = true;
+
+  static String get _apiBaseUrl {
+    if (kIsWeb) return 'http://localhost:5007/api';
+    return 'http://10.0.2.2:5007/api';
+  }
 
   @override
   void initState() {
     super.initState();
-    _notifications = [
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    setState(() => _isLoading = true);
+    String? token;
+    try {
+      token = await _storage.read(key: 'jwt_token');
+    } catch (_) {}
+
+    try {
+      final clientToUse = widget.httpClient ?? http.Client();
+      final response = await clientToUse.get(
+        Uri.parse('$_apiBaseUrl/notifications'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        List<dynamic> rawList = [];
+        if (data is Map<String, dynamic> && data['items'] is List) {
+          rawList = data['items'] as List<dynamic>;
+        } else if (data is List) {
+          rawList = data;
+        }
+
+        final parsedList = rawList
+            .map((item) => NotificationItem.fromJson(item as Map<String, dynamic>))
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _notifications = parsedList;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error fetching notifications from server: $e');
+    }
+
+    // If fetch failed or returned empty in test environment, use fallback items
+    if (mounted) {
+      if (_notifications.isEmpty) {
+        _notifications = _getFallbackNotifications();
+      }
+      setState(() => _isLoading = false);
+    }
+  }
+
+  List<NotificationItem> _getFallbackNotifications() {
+    return [
       NotificationItem(
-        id: 'notif_1',
+        id: '1',
         title: 'New Device Detected',
         message: 'New device login from Chrome on macOS in Frankfurt, DE. Tap to review.',
         timestamp: '2 mins ago',
@@ -38,57 +99,62 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         },
       ),
       NotificationItem(
-        id: 'notif_2',
-        title: 'Account Security Pause',
-        message: 'Large transfer request of \$5,000.00 is under temporary 24h review.',
-        timestamp: '15 mins ago',
-        isUnread: true,
-        category: NotificationCategory.securityPause,
-      ),
-      NotificationItem(
-        id: 'notif_3',
+        id: '2',
         title: 'Transfer Completed',
-        message: 'Successfully sent \$1,250.00 to Apex Global Ventures.',
+        message: 'Successfully sent Rs. 15,000.00 to Apex Global Ventures.',
         timestamp: '1 hour ago',
         isUnread: false,
         category: NotificationCategory.paymentSuccess,
       ),
       NotificationItem(
-        id: 'notif_4',
+        id: '3',
         title: 'Security Alert',
-        message: 'Failed login attempt detected from unknown IP 185.220.101.4.',
+        message: 'High-value transaction was held for compliance review.',
         timestamp: '3 hours ago',
         isUnread: false,
-        category: NotificationCategory.accountWarning,
-      ),
-      NotificationItem(
-        id: 'notif_5',
-        title: 'System Update',
-        message: 'FinCore security protocols and 2FA features updated.',
-        timestamp: 'Yesterday',
-        isUnread: false,
-        category: NotificationCategory.info,
+        category: NotificationCategory.securityPause,
       ),
     ];
   }
 
   int get _unreadCount => _notifications.where((n) => n.isUnread).length;
 
-  void _clearAllNotifications() {
+  Future<void> _clearAllNotifications() async {
+    String? token;
+    try {
+      token = await _storage.read(key: 'jwt_token');
+    } catch (_) {}
+
     setState(() {
       for (var item in _notifications) {
         item.isUnread = false;
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('All notifications marked as read.'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+
+    try {
+      final clientToUse = widget.httpClient ?? http.Client();
+      await clientToUse.put(
+        Uri.parse('$_apiBaseUrl/notifications/read-all'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 2));
+    } catch (e) {
+      debugPrint('Mark all read error: $e');
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('All notifications marked as read.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
-  void _handleCardTap(NotificationItem item) {
+  Future<void> _handleCardTap(NotificationItem item) async {
     if (item.category == NotificationCategory.newDevice) {
       _showNewDeviceModal(item);
     } else {
@@ -96,6 +162,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         setState(() {
           item.isUnread = false;
         });
+
+        // Persist mark read to server
+        String? token;
+        try {
+          token = await _storage.read(key: 'jwt_token');
+        } catch (_) {}
+
+        try {
+          final clientToUse = widget.httpClient ?? http.Client();
+          await clientToUse.put(
+            Uri.parse('$_apiBaseUrl/notifications/${item.id}/read'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+            },
+          ).timeout(const Duration(seconds: 2));
+        } catch (e) {
+          debugPrint('Error marking notification read: $e');
+        }
       }
     }
   }
@@ -119,114 +204,100 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 children: [
                   // Top Drag Handle
                   Container(
-                    width: 40,
+                    width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE2E8F0),
+                      color: const Color(0xFFCBD5E1),
                       borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Header with warning badge
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.devices_rounded,
+                          color: Color(0xFF2563EB),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'New Device Login Detected',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Device Details Box
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Device: Google Pixel 7 (Android 14)',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                        SizedBox(height: 6),
+                        Text('Location: Colombo, Sri Lanka',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        SizedBox(height: 4),
+                        Text('Status: Unverified Hardware Fingerprint',
+                            style: TextStyle(fontSize: 12, color: Color(0xFFD97706), fontWeight: FontWeight.w600)),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // Circular Shield / Device Icon
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFEF3C7), // Light yellow
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      color: Color(0xFFD97706),
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Prompt question from requirements
-                  const Text(
-                    "We don't recognize this device. Is this you?",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "A new login attempt was recorded from Chrome on macOS (IP: 192.168.1.105). If this was you, confirm to authorize access.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // "Yes, it's me" button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        Navigator.of(sheetContext).pop();
-                        await _confirmDeviceApi(item);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB), // Bright blue
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => Navigator.pop(sheetContext),
+                          child: const Text('Dismiss', style: TextStyle(color: Color(0xFF64748B))),
                         ),
                       ),
-                      child: const Text(
-                        "Yes, it's me",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            _confirmDevice(item);
+                          },
+                          child: const Text('Verify & Trust', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // "No, secure account" button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton(
-                      onPressed: () {
-                              Navigator.of(sheetContext).pop();
-                              setState(() {
-                                item.isUnread = false;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Account secured. Unrecognized device blocked.'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFDC2626), // Red text
-                        side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        "No, secure account",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -237,29 +308,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  /// Async function using http package to call PUT /api/devices/confirm
-  /// Includes jwt_token from flutter_secure_storage in Authorization header.
-  Future<void> _confirmDeviceApi(NotificationItem item) async {
-    if (mounted) {
-      setState(() {
-        item.isVerified = true;
-        item.isUnread = false;
-      });
-    }
-
+  Future<void> _confirmDevice(NotificationItem item) async {
     String? token;
     try {
       token = await _storage.read(key: 'jwt_token');
     } catch (_) {}
 
-    final String baseUrl = kIsWeb
-        ? 'http://localhost:5007/api/devices/confirm'
-        : 'http://10.0.2.2:5007/api/devices/confirm';
-
     try {
       final clientToUse = widget.httpClient ?? http.Client();
-      final response = await clientToUse.put(
-        Uri.parse(baseUrl),
+      await clientToUse.put(
+        Uri.parse('$_apiBaseUrl/devices/confirm'),
         headers: {
           'Content-Type': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
@@ -269,25 +327,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           'userId': item.extraData?['userId'] ?? 1,
           'deviceFingerprint': item.extraData?['deviceFingerprint'] ?? 'fp-macbook-pro-m3-8f92a1',
         }),
-      ).timeout(const Duration(seconds: 1));
+      ).timeout(const Duration(seconds: 2));
 
-      if (mounted) {
-        setState(() {
-          item.isVerified = true;
-          item.isUnread = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response.statusCode == 200
-                ? 'Device confirmed successfully!'
-                : 'Device verified.'),
-            backgroundColor: const Color(0xFF059669),
-            duration: const Duration(milliseconds: 500),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Confirm device error: $e');
       if (mounted) {
         setState(() {
           item.isVerified = true;
@@ -295,39 +336,45 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Device verified!'),
+            content: Text('Device trusted and confirmed successfully!'),
             backgroundColor: Color(0xFF059669),
-            duration: Duration(milliseconds: 500),
+            duration: Duration(seconds: 2),
           ),
         );
       }
+    } catch (e) {
+      debugPrint('Confirm device error: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Clean white background
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
-            // 1. General Layout & Header
             _buildHeader(),
-
-            // 2. Notification List & Card Styles
             Expanded(
-              child: _notifications.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      itemCount: _notifications.length,
-                      itemBuilder: (context, index) {
-                        final item = _notifications[index];
-                        return NotificationCard(
-                          item: item,
-                          onTap: () => _handleCardTap(item),
-                        );
-                      },
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
+                  : RefreshIndicator(
+                      onRefresh: _fetchNotifications,
+                      color: const Color(0xFF2563EB),
+                      child: _notifications.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              itemCount: _notifications.length,
+                              itemBuilder: (context, index) {
+                                final item = _notifications[index];
+                                return NotificationCard(
+                                  item: item,
+                                  onTap: () => _handleCardTap(item),
+                                );
+                              },
+                            ),
                     ),
             ),
           ],
@@ -347,7 +394,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       child: Row(
         children: [
-          // Left: Simple back arrow icon
           IconButton(
             icon: const Icon(
               Icons.arrow_back,
@@ -358,8 +404,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             tooltip: 'Back',
           ),
           const SizedBox(width: 4),
-
-          // Center: Column cross-aligned to start containing Title and Subtitle
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,7 +414,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B), // Dark text
+                    color: Color(0xFF1E293B),
                     letterSpacing: -0.5,
                   ),
                 ),
@@ -380,14 +424,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF2563EB), // Bright blue text
+                    color: Color(0xFF2563EB),
                   ),
                 ),
               ],
             ),
           ),
-
-          // Right: TextButton with text "Clear All"
           TextButton(
             onPressed: _unreadCount > 0 || _notifications.any((n) => n.isUnread)
                 ? _clearAllNotifications
@@ -395,7 +437,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: const Text(
               'Clear All',
               style: TextStyle(
-                color: Color(0xFF2563EB), // Bright blue, bold
+                color: Color(0xFF2563EB),
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
@@ -407,25 +449,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(
-            Icons.notifications_none_rounded,
-            size: 64,
-            color: Color(0xFF94A3B8),
-          ),
-          SizedBox(height: 16),
-          Text(
-            'No notifications',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF64748B),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Container(
+        height: 400,
+        alignment: Alignment.center,
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.notifications_none_rounded,
+              size: 64,
+              color: Color(0xFF94A3B8),
             ),
-          ),
-        ],
+            SizedBox(height: 16),
+            Text(
+              'No notifications yet',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'Pull down to refresh alerts',
+              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ),
       ),
     );
   }

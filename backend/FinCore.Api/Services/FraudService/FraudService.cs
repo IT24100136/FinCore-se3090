@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using FinCore.Api.Data;
@@ -51,6 +53,8 @@ namespace FinCore.Api.Services.FraudService
             string ipAddress,
             CancellationToken cancellationToken)
         {
+            var stopwatch = Stopwatch.StartNew();
+
             _logger.LogInformation(
                 "Starting fraud evaluation for transaction ID: {TransactionId}, Amount: {Amount}, IP: {IpAddress}",
                 transactionId, amount, ipAddress);
@@ -186,12 +190,28 @@ namespace FinCore.Api.Services.FraudService
                     agentResponse = await httpResponse.Content.ReadFromJsonAsync<MultiAgentResponseDto>(
                         cancellationToken: cancellationToken);
 
-                    if (agentResponse != null)
+                    // Deterministic Schema Guardrail: Validate expected fields before taking any action
+                    bool isDtoValid = agentResponse != null &&
+                                      !string.IsNullOrWhiteSpace(agentResponse.Decision) &&
+                                      !string.IsNullOrWhiteSpace(agentResponse.Status) &&
+                                      !double.IsNaN(agentResponse.CompositeRiskScore) &&
+                                      agentResponse.CompositeRiskScore >= 0.0 &&
+                                      agentResponse.CompositeRiskScore <= 100.0;
+
+                    if (isDtoValid && agentResponse != null)
                     {
                         agentPipelineExecuted = true;
                         _logger.LogInformation(
-                            "Multi-Agent Evaluation successful for TX {TransactionId}: Decision={Decision}, CompositeRisk={Risk}",
+                            "Multi-Agent Evaluation passed schema guardrails for TX {TransactionId}: Decision={Decision}, CompositeRisk={Risk}",
                             transactionId, agentResponse.Decision, agentResponse.CompositeRiskScore);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Multi-Agent response failed C# deterministic DTO schema validation for TX {TransactionId}. Falling back safely to rule engine.",
+                            transactionId);
+                        agentPipelineExecuted = false;
+                        agentResponse = null;
                     }
                 }
                 else
@@ -316,6 +336,83 @@ namespace FinCore.Api.Services.FraudService
                 ? string.Join("; ", reasons)
                 : "Transaction within normal parameters.";
 
+            stopwatch.Stop();
+            long latencyMs = stopwatch.ElapsedMilliseconds;
+
+            string workflowId = $"WF-TX-{transactionId}-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+            string workflowObjective = "Multi-Agent Cooperative Fraud Risk Assessment & Policy Governance";
+
+            var planObject = new
+            {
+                objective = workflowObjective,
+                cooperative_pipeline = new[]
+                {
+                    new { step = 1, agent = "Transaction Analysis Agent", role = "Analyze baseline deviation, category, note semantics, and 90-day adaptive window" },
+                    new { step = 2, agent = "Anomaly Detection Agent", role = "Evaluate LangGraph behavioral signals, impossible travel, and SHAP explainability" },
+                    new { step = 3, agent = "Approval Coordinator Agent", role = "Arbitrate statutory dual-approval, risk tiers, and resolution paths" },
+                    new { step = 4, agent = "Tool-Use Agent", role = "Dispatch step-up security notifications and emit audit telemetry" }
+                }
+            };
+            string planJson = JsonSerializer.Serialize(planObject);
+
+            string agentDelegationsJson;
+            string toolCallsJson;
+            string validationOutputsJson;
+
+            if (agentPipelineExecuted && agentResponse != null)
+            {
+                agentDelegationsJson = JsonSerializer.Serialize(new
+                {
+                    agent_1_transaction_analysis = agentResponse.Agent1,
+                    agent_2_anomaly_detection = agentResponse.Agent2,
+                    agent_3_approval_coordinator = agentResponse.Agent3,
+                    agent_4_tool_use = agentResponse.Agent4
+                });
+
+                toolCallsJson = JsonSerializer.Serialize(new
+                {
+                    notification_dispatch = agentResponse.Agent4,
+                    shap_explanation = new { primary_driver = agentResponse.PrimaryShapFeature },
+                    ip_geolocation = new { location.IsSuccessful, location.CountryName, location.City, location.Latitude, location.Longitude }
+                });
+
+                validationOutputsJson = JsonSerializer.Serialize(new
+                {
+                    deterministic_guardrails_passed = true,
+                    python_pydantic_validated = true,
+                    csharp_dto_validated = true,
+                    statutory_dual_approval_evaluated = (amount >= 75000m),
+                    risk_flag_threshold = flagThreshold,
+                    final_status = status,
+                    final_risk_score = riskScore
+                });
+            }
+            else
+            {
+                agentDelegationsJson = JsonSerializer.Serialize(new
+                {
+                    status = "FALLBACK_TO_DETERMINISTIC_RULES",
+                    reason = "Multi-Agent microservice unavailable or response failed schema guardrails",
+                    fallback_engine = "FinCore-RuleEngine-SemanticKernel-AnomalyAgent"
+                });
+
+                toolCallsJson = JsonSerializer.Serialize(new
+                {
+                    ip_geolocation = new { location.IsSuccessful, location.CountryName, location.City }
+                });
+
+                validationOutputsJson = JsonSerializer.Serialize(new
+                {
+                    deterministic_guardrails_passed = true,
+                    python_pydantic_validated = false,
+                    circuit_breaker_active = true,
+                    statutory_dual_approval_evaluated = (amount >= 75000m),
+                    risk_flag_threshold = flagThreshold,
+                    final_status = status,
+                    final_risk_score = riskScore
+                });
+            }
+
             // 8. Instantiate and Persist FraudFlag entity
             var fraudFlag = new FraudFlag
             {
@@ -326,12 +423,31 @@ namespace FinCore.Api.Services.FraudService
                 CreatedAt = DateTime.UtcNow
             };
 
+            // Section 9.1: Persist durable multi-agent workflow state in PostgreSQL
+            var agentExecutionLog = new AgentExecutionLog
+            {
+                WorkflowId = workflowId,
+                TransactionId = transactionId.ToString(),
+                WorkflowObjective = workflowObjective,
+                PlanJson = planJson,
+                AgentName = agentPipelineExecuted ? "FinCore-MultiAgent-Cooperative-Orchestrator" : "FinCore-RuleEngine-CircuitBreaker-Fallback",
+                AgentDelegationsJson = agentDelegationsJson,
+                ToolCallsJson = toolCallsJson,
+                ValidationOutputsJson = validationOutputsJson,
+                FinalDecision = agentResponse?.Decision ?? (status == "Flagged" ? "HELD_FOR_REVIEW" : "AUTO_APPROVE"),
+                ApprovalStatus = status,
+                CompositeRiskScore = riskScore,
+                ExecutionLatencyMs = latencyMs,
+                CreatedAt = DateTime.UtcNow
+            };
+
             _context.FraudFlags.Add(fraudFlag);
+            _context.AgentExecutionLogs.Add(agentExecutionLog);
             await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Completed fraud evaluation for transaction ID {TransactionId}: RiskScore={RiskScore}, Status={Status}",
-                transactionId, riskScore, status);
+                "Completed fraud evaluation for transaction ID {TransactionId}: RiskScore={RiskScore}, Status={Status}, Latency={Latency}ms, WorkflowId={WorkflowId}",
+                transactionId, riskScore, status, latencyMs, workflowId);
 
             return fraudFlag;
         }
@@ -363,6 +479,18 @@ namespace FinCore.Api.Services.FraudService
 
         [System.Text.Json.Serialization.JsonPropertyName("reasons")]
         public List<string> Reasons { get; set; } = new();
+
+        [System.Text.Json.Serialization.JsonPropertyName("agent_1")]
+        public JsonElement? Agent1 { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("agent_2")]
+        public JsonElement? Agent2 { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("agent_3")]
+        public JsonElement? Agent3 { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("agent_4")]
+        public JsonElement? Agent4 { get; set; }
     }
 
     public class ShapResponseDto

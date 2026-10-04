@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fraudService } from '../../services/fraudService';
+import { useAuth } from '../../context/AuthContext';
 import {
   Sliders,
   PlusCircle,
@@ -18,7 +19,13 @@ import {
   HelpCircle,
   ArrowUpDown,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Lock,
+  History,
+  FileText,
+  Clock,
+  Eye,
+  ShieldAlert
 } from 'lucide-react';
 
 const SIGNAL_CATEGORIES = [
@@ -32,12 +39,22 @@ const SIGNAL_CATEGORIES = [
 ];
 
 export default function RuleConfigurationPanel({ onRuleChanged }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'Admin';
+
+  const [panelTab, setPanelTab] = useState('rules'); // 'rules' | 'audit'
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', message: string }
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [editingRuleId, setEditingRuleId] = useState(null);
+  const [selectedInspectRule, setSelectedInspectRule] = useState(null);
+
+  // Rule Audit Log state
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+  const [auditSearch, setAuditSearch] = useState('');
 
   // Form State
   const initialFormState = {
@@ -66,6 +83,18 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
       setFeedback({ type: 'error', message: 'Failed to load rules: ' + (err.message || 'Unknown error') });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAuditLogs = async () => {
+    setLoadingAudit(true);
+    try {
+      const data = await fraudService.getRuleAuditLogs();
+      setAuditLogs(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load rule audit logs:', err);
+    } finally {
+      setLoadingAudit(false);
     }
   };
 
@@ -317,7 +346,222 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
         </div>
       )}
 
-      {/* Main Grid: Split View (Table Left, Form Right) */}
+      {/* Top Tab Switcher: Rules vs Rule Audit Log */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '2px' }}>
+        <button
+          onClick={() => setPanelTab('rules')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 18px',
+            fontSize: '13px',
+            fontWeight: 700,
+            border: 'none',
+            backgroundColor: 'transparent',
+            color: panelTab === 'rules' ? '#2563eb' : '#64748b',
+            borderBottom: panelTab === 'rules' ? '2px solid #2563eb' : '2px solid transparent',
+            cursor: 'pointer'
+          }}
+        >
+          <Sliders size={16} /> Active Fraud Rules ({rules.length})
+        </button>
+        <button
+          onClick={() => {
+            setPanelTab('audit');
+            loadAuditLogs();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 18px',
+            fontSize: '13px',
+            fontWeight: 700,
+            border: 'none',
+            backgroundColor: 'transparent',
+            color: panelTab === 'audit' ? '#2563eb' : '#64748b',
+            borderBottom: panelTab === 'audit' ? '2px solid #2563eb' : '2px solid transparent',
+            cursor: 'pointer'
+          }}
+        >
+          <History size={16} /> Rule Audit Log & Change History
+        </button>
+      </div>
+
+      {/* Analyst Read-Only Alert Banner if not Admin */}
+      {!isAdmin && (
+        <div style={{
+          padding: '10px 16px',
+          backgroundColor: '#eff6ff',
+          border: '1px solid #bfdbfe',
+          borderRadius: '8px',
+          color: '#1e40af',
+          fontSize: '12px',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Lock size={15} />
+          <span>Analyst Read-Only Mode: You have inspection access. Modifying thresholds, creating, or deleting rules requires Administrator privileges.</span>
+        </div>
+      )}
+
+      {/* VIEW: AUDIT LOGS */}
+      {panelTab === 'audit' && (
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            padding: '16px 20px',
+            backgroundColor: '#f8fafc',
+            borderBottom: '1px solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <History size={18} color="#2563eb" /> Rule Mutation Audit Trail (Section 6)
+              </h3>
+              <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                Immutable historical logs recording who modified which rule threshold, with before & after state values.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '9px' }} />
+                <input
+                  type="text"
+                  placeholder="Filter audit logs..."
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  style={{
+                    padding: '7px 12px 7px 30px',
+                    fontSize: '12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+              <button
+                onClick={loadAuditLogs}
+                disabled={loadingAudit}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 12px',
+                  backgroundColor: '#fff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <RefreshCw size={13} className={loadingAudit ? 'animate-spin' : ''} /> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Timestamp (UTC)</th>
+                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Rule Identifier</th>
+                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Action</th>
+                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Previous Value</th>
+                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>New Value</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Modified By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingAudit ? (
+                  <tr>
+                    <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#64748b' }}>
+                      <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: '#2563eb' }} />
+                      Loading rule audit logs...
+                    </td>
+                  </tr>
+                ) : auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}>
+                      No rule changes have been recorded yet.
+                    </td>
+                  </tr>
+                ) : (
+                  auditLogs
+                    .filter(log => {
+                      if (!auditSearch.trim()) return true;
+                      const q = auditSearch.toLowerCase();
+                      return (
+                        (log.ruleName && log.ruleName.toLowerCase().includes(q)) ||
+                        (log.action && log.action.toLowerCase().includes(q)) ||
+                        (log.modifiedBy && log.modifiedBy.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((log) => {
+                      const actionBadge = log.action === 'CREATED'
+                        ? { bg: '#dcfce7', text: '#15803d', border: '#86efac' }
+                        : log.action === 'UPDATED'
+                        ? { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' }
+                        : log.action === 'TOGGLED'
+                        ? { bg: '#fef3c7', text: '#b45309', border: '#fde68a' }
+                        : { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' };
+
+                      return (
+                        <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', color: '#64748b', fontFamily: 'monospace' }}>
+                            {log.timestamp ? new Date(log.timestamp).toISOString().replace('T', ' ').substring(0, 19) + ' UTC' : 'N/A'}
+                          </td>
+                          <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a' }}>
+                            {log.ruleName || log.ruleId}
+                          </td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              backgroundColor: actionBadge.bg,
+                              color: actionBadge.text,
+                              border: `1px solid ${actionBadge.border}`
+                            }}>
+                              {log.action}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: '11px', color: '#64748b', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.previousValue}>
+                            {log.previousValue || '—'}
+                          </td>
+                          <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: '11px', color: '#0f172a', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.newValue}>
+                            {log.newValue || '—'}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#334155', fontWeight: 600 }}>
+                            {log.modifiedBy || 'Admin'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: ACTIVE RULES */}
+      {panelTab === 'rules' && (
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1.6fr) minmax(360px, 1fr)',
@@ -521,8 +765,9 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
                         {/* Status Toggle Switch */}
                         <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
                           <button
-                            onClick={() => handleToggleStatus(rule)}
-                            title={rule.isActive ? 'Click to disable' : 'Click to activate'}
+                            onClick={isAdmin ? () => handleToggleStatus(rule) : undefined}
+                            disabled={!isAdmin}
+                            title={!isAdmin ? 'Requires Administrator privileges' : (rule.isActive ? 'Click to disable' : 'Click to activate')}
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -530,7 +775,8 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
                               padding: '3px 8px',
                               borderRadius: '12px',
                               border: 'none',
-                              cursor: 'pointer',
+                              cursor: !isAdmin ? 'not-allowed' : 'pointer',
+                              opacity: !isAdmin ? 0.6 : 1,
                               fontSize: '11px',
                               fontWeight: 700,
                               backgroundColor: rule.isActive ? '#dcfce7' : '#f1f5f9',
@@ -551,15 +797,16 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
                         <td style={{ padding: '14px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                             <button
-                              onClick={() => handleEditRule(rule)}
-                              title="Edit Rule Configuration"
+                              onClick={isAdmin ? () => handleEditRule(rule) : () => setSelectedInspectRule(rule)}
+                              title={!isAdmin ? 'Requires Administrator privileges (Click row to inspect)' : 'Edit Rule Configuration'}
                               style={{
                                 padding: '6px 8px',
                                 backgroundColor: isSelectedForEdit ? '#2563eb' : '#fff',
-                                color: isSelectedForEdit ? '#fff' : '#475569',
+                                color: isSelectedForEdit ? '#fff' : !isAdmin ? '#94a3b8' : '#475569',
                                 border: '1px solid #cbd5e1',
                                 borderRadius: '6px',
-                                cursor: 'pointer',
+                                cursor: !isAdmin ? 'not-allowed' : 'pointer',
+                                opacity: !isAdmin ? 0.5 : 1,
                                 display: 'inline-flex',
                                 alignItems: 'center'
                               }}
@@ -567,15 +814,17 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
                               <Edit2 size={13} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRule(rule)}
-                              title="Delete Rule"
+                              onClick={isAdmin ? () => handleDeleteRule(rule) : undefined}
+                              disabled={!isAdmin}
+                              title={!isAdmin ? 'Requires Administrator privileges' : 'Delete Rule'}
                               style={{
                                 padding: '6px 8px',
                                 backgroundColor: '#fff',
-                                color: '#dc2626',
+                                color: !isAdmin ? '#94a3b8' : '#dc2626',
                                 border: '1px solid #fee2e2',
                                 borderRadius: '6px',
-                                cursor: 'pointer',
+                                cursor: !isAdmin ? 'not-allowed' : 'pointer',
+                                opacity: !isAdmin ? 0.4 : 1,
                                 display: 'inline-flex',
                                 alignItems: 'center'
                               }}
@@ -608,7 +857,122 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: "Add New Rule" / "Edit Rule" Form Card */}
+        {/* RIGHT COLUMN: Admin Form OR Analyst Inspection Panel */}
+        {!isAdmin ? (
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '12px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              padding: '18px 24px',
+              backgroundColor: '#f8fafc',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                backgroundColor: '#fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#dc2626'
+              }}>
+                <Lock size={16} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                  Rule Authoring Restricted
+                </h3>
+                <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>
+                  Requires Administrator privileges
+                </span>
+              </div>
+            </div>
+
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                As an Analyst, you have <strong>Read-Only</strong> permissions to inspect risk thresholds, weights, and categories.
+                Modifying thresholds or defining new safety rules requires an <strong>Administrator</strong> role.
+              </p>
+
+              {/* Inspected Rule Details */}
+              {(selectedInspectRule || rules[0]) && (
+                <div style={{
+                  padding: '16px',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#2563eb', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      Inspected Rule
+                    </span>
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      backgroundColor: (selectedInspectRule || rules[0]).isActive ? '#dcfce7' : '#f1f5f9',
+                      color: (selectedInspectRule || rules[0]).isActive ? '#15803d' : '#64748b'
+                    }}>
+                      {(selectedInspectRule || rules[0]).isActive ? 'Active' : 'Disabled'}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                    {(selectedInspectRule || rules[0]).ruleName}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
+                    {(selectedInspectRule || rules[0]).description || 'Standard fraud heuristic parameter.'}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0', fontSize: '12px' }}>
+                    <div>
+                      <span style={{ color: '#64748b' }}>Category:</span>
+                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{(selectedInspectRule || rules[0]).signalCategory}</div>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b' }}>Threshold:</span>
+                      <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                        {(selectedInspectRule || rules[0]).thresholdValue} {(selectedInspectRule || rules[0]).thresholdUnit || ''}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b' }}>Score Weight:</span>
+                      <div style={{ fontWeight: 700, color: '#2563eb' }}>+{(selectedInspectRule || rules[0]).scoreWeight} pts</div>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b' }}>Rule ID:</span>
+                      <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#64748b' }}>{(selectedInspectRule || rules[0]).ruleId || `RUL-${(selectedInspectRule || rules[0]).id}`}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{
+                padding: '12px',
+                backgroundColor: '#eff6ff',
+                borderRadius: '8px',
+                border: '1px solid #bfdbfe',
+                fontSize: '11px',
+                color: '#1e40af',
+                lineHeight: 1.4
+              }}>
+                💡 Tip: Click any row in the table to view its full parameter breakdown above.
+              </div>
+            </div>
+          </div>
+        ) : (
         <div style={{
           backgroundColor: '#fff',
           borderRadius: '12px',
@@ -1122,9 +1486,9 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
 
           </form>
         </div>
-
+        )}
       </div>
-
+      )}
     </div>
   );
 }

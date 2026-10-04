@@ -21,23 +21,67 @@ class WalletService {
   // ── GET /wallets/balance ──────────────────────────────────────────────────
   Future<double> getBalance() async {
     final token = await _getToken();
-    final res = await http.get(
-      Uri.parse('$baseUrl/wallets/balance'),
-      headers: _buildHeaders(token),
-    );
-    if (res.statusCode == 200) {
-      return (jsonDecode(res.body)['balance'] as num).toDouble();
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/wallets/balance'),
+        headers: _buildHeaders(token),
+      ).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['walletId'] != null) {
+          final wid = data['walletId'].toString();
+          await _storage.write(key: 'wallet_id', value: wid);
+          final idNum = int.tryParse(wid) ?? 1;
+          final accNum = 'ACC-${idNum.toString().padLeft(8, '0')}';
+          await _storage.write(key: 'account_number', value: accNum);
+        }
+        if (data['accountNumber'] != null) {
+          await _storage.write(key: 'account_number', value: data['accountNumber'].toString());
+        }
+        final bal = (data['balance'] as num).toDouble();
+        await _storage.write(key: 'cached_balance', value: bal.toString());
+        return bal;
+      }
+    } catch (_) {
+      final cached = await _storage.read(key: 'cached_balance');
+      if (cached != null) {
+        final val = double.tryParse(cached);
+        if (val != null) return val;
+      }
+      rethrow;
     }
-    throw Exception('Failed to load balance: ${res.statusCode}');
+    final cached = await _storage.read(key: 'cached_balance');
+    if (cached != null) {
+      final val = double.tryParse(cached);
+      if (val != null) return val;
+    }
+    throw Exception('Failed to load balance');
+  }
+
+  Future<String> getAccountNumber() async {
+    final acc = await _storage.read(key: 'account_number');
+    if (acc != null && acc.isNotEmpty) return acc;
+    final wid = await _storage.read(key: 'wallet_id');
+    final id = int.tryParse(wid ?? '1') ?? 1;
+    return 'ACC-${id.toString().padLeft(8, '0')}';
   }
 
   // ── POST /wallets/topup ───────────────────────────────────────────────────
-  Future<Map<String, dynamic>> topUp(double amount) async {
+  Future<Map<String, dynamic>> topUp(
+    double amount, {
+    String paymentMethodType = 'CARD',
+    String? sourceReference,
+  }) async {
     final token = await _getToken();
     final res = await http.post(
       Uri.parse('$baseUrl/wallets/topup'),
       headers: _buildHeaders(token),
-      body: jsonEncode({'amount': amount}),
+      body: jsonEncode({
+        'amount': amount,
+        'paymentMethodType': paymentMethodType,
+        if (sourceReference != null && sourceReference.isNotEmpty)
+          'sourceReference': sourceReference,
+      }),
     );
     if (res.statusCode == 200) return jsonDecode(res.body);
     throw Exception('Top up failed: ${res.body}');
@@ -57,8 +101,44 @@ class WalletService {
         if (note != null && note.isNotEmpty) 'note': note,
       }),
     );
-    if (res.statusCode == 200) return jsonDecode(res.body);
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      if (data['senderAccountNumber'] != null) {
+        await _storage.write(key: 'account_number', value: data['senderAccountNumber'].toString());
+      }
+      return data;
+    }
     throw Exception('Transfer failed: ${res.body}');
+  }
+
+  // ── POST /transactions/{id}/step-up-verify ──────────────────────────────
+  Future<Map<String, dynamic>> stepUpVerify(
+    dynamic transactionId, {
+    String verificationType = 'OTP',
+    String code = '123456',
+  }) async {
+    final token = await _getToken();
+    final res = await http.post(
+      Uri.parse('$baseUrl/transactions/$transactionId/step-up-verify'),
+      headers: _buildHeaders(token),
+      body: jsonEncode({
+        'verificationType': verificationType,
+        'code': code,
+      }),
+    );
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      if (data['senderBalance'] != null) {
+        final bal = (data['senderBalance'] as num).toDouble();
+        await _storage.write(key: 'cached_balance', value: bal.toString());
+      }
+      if (data['senderAccountNumber'] != null) {
+        await _storage.write(key: 'account_number', value: data['senderAccountNumber'].toString());
+      }
+      return data;
+    }
+    final errData = jsonDecode(res.body);
+    throw Exception(errData['message'] ?? 'Step-up verification failed (${res.statusCode})');
   }
 
   // ── GET /transactions/history (with filters + pagination) ─────────────────

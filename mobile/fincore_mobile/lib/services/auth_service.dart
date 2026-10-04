@@ -176,8 +176,28 @@ class AuthService {
       final token = data['token'] as String;
       await saveToken(token);
 
-      // Extract UserId and automatically hit /api/devices/verify
+      // Extract User Profile and save to SecureStorage
+      final userObj = data['user'] as Map<String, dynamic>?;
       final claims = parseJwt(token);
+
+      final id = userObj?['id']?.toString() ?? claims?['UserId']?.toString() ?? claims?['sub']?.toString() ?? '';
+      final name = userObj?['fullName']?.toString() ?? claims?['name']?.toString() ?? claims?['unique_name']?.toString() ?? email.split('@')[0];
+      final userEmail = userObj?['email']?.toString() ?? claims?['email']?.toString() ?? email;
+      final phone = userObj?['phoneNumber']?.toString();
+      final role = userObj?['role']?.toString() ?? claims?['role']?.toString() ?? 'Customer';
+      final rawWalletId = userObj?['walletId'];
+      final walletId = rawWalletId is int ? rawWalletId : int.tryParse(rawWalletId?.toString() ?? '');
+
+      await saveUserProfile(
+        id: id,
+        name: name,
+        email: userEmail,
+        phone: phone,
+        role: role,
+        walletId: walletId,
+      );
+
+      // Extract UserId and automatically hit /api/devices/verify
       final rawUserId = claims?['UserId'] ?? claims?['sub'] ?? claims?['nameid'] ?? 1;
       final userId = int.tryParse(rawUserId.toString()) ?? 1;
 
@@ -193,6 +213,7 @@ class AuthService {
       return {
         'success': true,
         'token': token,
+        'user': userObj,
         'message': data['message'],
         'deviceVerification': verification,
       };
@@ -201,6 +222,65 @@ class AuthService {
     }
   }
 
+  // ── OTP Verification Flow ──────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> sendOtp({
+    required String identifier,
+    String purpose = 'LOGIN',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/otp/send'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'identifier': identifier.trim(),
+          'purpose': purpose,
+        }),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': data};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Failed to send OTP'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Network error sending OTP: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> verifyOtp({
+    required String identifier,
+    required String code,
+    String purpose = 'LOGIN',
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/otp/verify'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'identifier': identifier.trim(),
+          'code': code.trim(),
+          'purpose': purpose,
+        }),
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {'success': true, 'message': data['message']};
+      } else {
+        return {'success': false, 'message': data['message'] ?? 'Invalid verification code'};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Network error verifying OTP: $e'};
+    }
+  }
+
+  static String formatAccountNumber(dynamic walletId) {
+    final id = (walletId is int ? walletId : int.tryParse(walletId?.toString() ?? '1')) ?? 1;
+    return 'ACC-${id.toString().padLeft(8, '0')}';
+  }
+
+  // ── Storage Operations ─────────────────────────────────────────────────────
   static Future<void> saveToken(String token) async {
     await _storage.write(key: 'jwt_token', value: token);
   }
@@ -209,7 +289,54 @@ class AuthService {
     return await _storage.read(key: 'jwt_token');
   }
 
+  static Future<void> saveUserProfile({
+    required String id,
+    required String name,
+    required String email,
+    String? phone,
+    String? role,
+    int? walletId,
+  }) async {
+    await _storage.write(key: 'user_id', value: id);
+    await _storage.write(key: 'user_name', value: name);
+    await _storage.write(key: 'user_email', value: email);
+    if (phone != null) await _storage.write(key: 'user_phone', value: phone);
+    if (role != null) await _storage.write(key: 'user_role', value: role);
+    if (walletId != null) {
+      await _storage.write(key: 'wallet_id', value: walletId.toString());
+      await _storage.write(key: 'account_number', value: formatAccountNumber(walletId));
+    }
+  }
+
+  static Future<Map<String, dynamic>> getCurrentUser() async {
+    final id = await _storage.read(key: 'user_id');
+    final name = await _storage.read(key: 'user_name');
+    final email = await _storage.read(key: 'user_email');
+    final phone = await _storage.read(key: 'user_phone');
+    final role = await _storage.read(key: 'user_role');
+    final walletIdStr = await _storage.read(key: 'wallet_id');
+    final walletIdInt = int.tryParse(walletIdStr ?? '') ?? 1;
+    final savedAcc = await _storage.read(key: 'account_number');
+    final accountNumber = (savedAcc != null && savedAcc.isNotEmpty) ? savedAcc : formatAccountNumber(walletIdInt);
+
+    return {
+      'id': id ?? '',
+      'name': (name != null && name.isNotEmpty) ? name : (email != null ? email.split('@')[0] : 'Valued Member'),
+      'email': email ?? '',
+      'phone': phone ?? '',
+      'role': role ?? 'Customer',
+      'walletId': walletIdInt,
+      'accountNumber': accountNumber,
+    };
+  }
+
   static Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
+    await _storage.delete(key: 'user_id');
+    await _storage.delete(key: 'user_name');
+    await _storage.delete(key: 'user_email');
+    await _storage.delete(key: 'user_phone');
+    await _storage.delete(key: 'user_role');
+    await _storage.delete(key: 'wallet_id');
   }
 }

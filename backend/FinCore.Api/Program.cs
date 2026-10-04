@@ -26,6 +26,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<IGeolocationService, GeolocationService>();
 builder.Services.AddScoped<IFraudService, FraudService>();
 builder.Services.AddScoped<INotificationService, MockNotificationService>();
@@ -94,6 +95,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.EnsureCreated();
+    await DbInitializer.InitializeAsync(db);
 }
 
 // Configure the HTTP request pipeline.

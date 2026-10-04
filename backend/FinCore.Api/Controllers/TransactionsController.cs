@@ -29,14 +29,23 @@ namespace FinCore.Api.Controllers
             _hubContext = hubContext;
         }
 
-        private int GetUserId()
+        private (Guid? userGuid, int deterministicIntId) ResolveUserIdentity()
         {
-            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (int.TryParse(userIdStr, out int userId))
-                return userId;
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("UserId");
+            if (Guid.TryParse(userIdStr, out Guid userGuid))
+            {
+                return (userGuid, DbInitializer.GetDeterministicUserId(userGuid));
+            }
 
-            return Math.Abs(userIdStr?.GetHashCode() ?? 0);
+            if (int.TryParse(userIdStr, out int intId))
+            {
+                return (null, intId);
+            }
+
+            return (null, 1);
         }
+
+        private int GetUserId() => ResolveUserIdentity().deterministicIntId;
 
         // ── POST /api/transactions/transfer ──────────────────────────────────
         [HttpPost("transfer")]
@@ -44,8 +53,10 @@ namespace FinCore.Api.Controllers
         {
             if (request.Amount <= 0) return BadRequest("Amount must be greater than zero.");
 
-            var userId = GetUserId();
-            var senderWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
+            var (userGuid, userId) = ResolveUserIdentity();
+            var senderWallet = userGuid.HasValue
+                ? await _context.Wallets.FirstOrDefaultAsync(w => w.UserGuid == userGuid.Value || w.UserId == userId)
+                : await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == userId);
 
             if (senderWallet == null || senderWallet.Balance < request.Amount)
                 return BadRequest("Insufficient funds.");
@@ -58,8 +69,8 @@ namespace FinCore.Api.Controllers
 
             if (receiverUser != null)
             {
-                var receiverUserIdInt = Math.Abs(receiverUser.Id.ToString().GetHashCode());
-                var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == receiverUserIdInt);
+                var receiverIntId = DbInitializer.GetDeterministicUserId(receiverUser.Id);
+                var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.UserGuid == receiverUser.Id || w.UserId == receiverIntId);
                 if (rw != null) receiverWalletId = rw.Id;
             }
 
@@ -143,6 +154,21 @@ namespace FinCore.Api.Controllers
                 };
 
                 _context.ReviewQueues.Add(reviewCase);
+
+                // Add in-app notification for held transfer
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = senderWallet.UserId,
+                    Recipient = User.FindFirstValue(ClaimTypes.Email) ?? "user@fincore.internal",
+                    RecipientName = userName,
+                    Title = "Security Alert: Transfer Under Review",
+                    Message = $"Security Alert: Your transfer of Rs. {transaction.Amount:N2} to {request.RecipientIdentifier} is under review.",
+                    DeliveryStatus = "Sent",
+                    ChannelDetails = "Fraud Detection Engine",
+                    IsRead = false,
+                    Category = "securityPause",
+                    Timestamp = DateTime.UtcNow
+                });
             }
             else
             {
@@ -154,6 +180,39 @@ namespace FinCore.Api.Controllers
                 {
                     var rw = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == receiverWalletId.Value);
                     if (rw != null) rw.Balance += transaction.Amount;
+                }
+
+                // Add in-app notification for successful transfer to sender
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = senderWallet.UserId,
+                    Recipient = User.FindFirstValue(ClaimTypes.Email) ?? "user@fincore.internal",
+                    RecipientName = userName,
+                    Title = "Transfer Completed",
+                    Message = $"Transfer of Rs. {transaction.Amount:N2} to {request.RecipientIdentifier} was successful.",
+                    DeliveryStatus = "Sent",
+                    ChannelDetails = "Payment Gateway",
+                    IsRead = false,
+                    Category = "paymentSuccess",
+                    Timestamp = DateTime.UtcNow
+                });
+
+                if (receiverUser != null)
+                {
+                    var receiverIntId = DbInitializer.GetDeterministicUserId(receiverUser.Id);
+                    _context.Notifications.Add(new Notification
+                    {
+                        UserId = receiverIntId,
+                        Recipient = receiverUser.Email,
+                        RecipientName = receiverUser.Name,
+                        Title = "Funds Received",
+                        Message = $"You received Rs. {transaction.Amount:N2} from {userName}.",
+                        DeliveryStatus = "Sent",
+                        ChannelDetails = "Payment Gateway",
+                        IsRead = false,
+                        Category = "paymentSuccess",
+                        Timestamp = DateTime.UtcNow
+                    });
                 }
             }
 
@@ -175,19 +234,27 @@ namespace FinCore.Api.Controllers
             }
             catch { /* Resilient to offline websocket listeners */ }
 
+            bool requiresStepUp = fraudFlag.RiskScore >= 50 && fraudFlag.RiskScore < 70 && !isStatutoryDualApproval;
+
             return Ok(new
             {
                 message = transaction.Status == "Completed"
                     ? "Transfer completed successfully."
-                    : (transaction.Status == "PendingSecondApproval"
-                        ? "Transfer held for statutory dual maker-checker authorization."
-                        : "Transfer held for fraud risk review."),
+                    : (requiresStepUp
+                        ? "Transfer paused for security verification. Please complete step-up authentication."
+                        : (transaction.Status == "PendingSecondApproval"
+                            ? "Transfer held for statutory dual maker-checker authorization."
+                            : "Transfer held for fraud risk review.")),
+                transactionId = transaction.Id,
+                id = transaction.Id,
                 referenceId = transaction.ReferenceId,
+                senderAccountNumber = $"ACC-{senderWallet.Id:D8}",
                 status = transaction.Status,
                 amount = transaction.Amount,
                 recipient = request.RecipientIdentifier,
                 riskScore = fraudFlag.RiskScore,
                 isHeld = transaction.Status != "Completed",
+                requiresStepUp,
                 isFraudFlagged = fraudFlag.RiskScore >= 40
             });
         }
@@ -262,6 +329,9 @@ namespace FinCore.Api.Controllers
                     t.Status,
                     t.Timestamp,
                     t.Note,
+                    senderAccountNumber = $"ACC-{t.SenderWalletId:D8}",
+                    senderWallet = $"WAL-USR-{t.SenderWalletId}",
+                    receiverAccountNumber = t.ReceiverWalletId.HasValue ? $"ACC-{t.ReceiverWalletId.Value:D8}" : null,
                     direction = (t.ReceiverWalletId == wallet.Id || (t.ReceiverWalletId == null && t.SenderWalletId == wallet.Id && ((t.Note != null && t.Note.Contains("Top Up")) || t.ReferenceId.StartsWith("TOPUP")))) ? "credit" : "debit",
                     // Return positive for credits, negative for debits (for Flutter display)
                     displayAmount = (t.ReceiverWalletId == wallet.Id || (t.ReceiverWalletId == null && t.SenderWalletId == wallet.Id && ((t.Note != null && t.Note.Contains("Top Up")) || t.ReferenceId.StartsWith("TOPUP")))) ? t.Amount : -t.Amount,
@@ -413,50 +483,257 @@ namespace FinCore.Api.Controllers
             });
         }
 
-        // ── POST /api/transactions/{id}/reverse ──────────────────────────────
-        // Admin-only: reverses a confirmed fraudulent transaction
-        [HttpPost("{id}/reverse")]
-        [Authorize(Roles = "Admin")]
-        public IActionResult Reverse(int id, [FromBody] ReverseRequest? request)
+        // ── POST /api/transactions/{id}/step-up-verify ───────────────────────
+        // Step-up verification for medium risk (Score 50-69, status HELD / STEP_UP_CHALLENGE)
+        [HttpPost("{id}/step-up-verify")]
+        public async Task<IActionResult> StepUpVerify(string id, [FromBody] StepUpVerificationRequest? request)
         {
-            var transaction = _context.Transactions.FirstOrDefault(t => t.Id == id);
+            Transaction? transaction = null;
+            if (int.TryParse(id, out int dbId))
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.Id == dbId || t.ReferenceId == id);
+            }
+            else
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == id);
+            }
 
             if (transaction == null)
-                return NotFound("Transaction not found.");
+            {
+                return NotFound(new { message = $"Transaction '{id}' was not found." });
+            }
+
+            // 1. Verify transaction status is currently held for step-up
+            if (transaction.Status == "Completed")
+            {
+                return Ok(new
+                {
+                    message = "Transaction has already been completed.",
+                    transactionId = transaction.Id,
+                    referenceId = transaction.ReferenceId,
+                    status = "Completed",
+                    amount = transaction.Amount
+                });
+            }
+
+            if (transaction.Status != "Held" && transaction.Status != "Pending" && transaction.Status != "PendingSecondApproval")
+            {
+                return BadRequest(new { message = $"Cannot verify transaction with status '{transaction.Status}'." });
+            }
+
+            // Verify demo OTP or Biometric
+            var verificationType = request?.VerificationType?.ToUpper() ?? "OTP";
+            var code = request?.Code ?? "123456";
+            if (verificationType == "OTP" && code != "123456")
+            {
+                return BadRequest(new { message = "Invalid OTP code. Enter 123456 in demo mode." });
+            }
+
+            // 2. Transition status from HELD to COMPLETED
+            transaction.Status = "Completed";
+            transaction.Note = (transaction.Note ?? "") + $" [Step-Up Verified via {verificationType}]";
+
+            // 3. Execute atomic balance transfer in PostgreSQL Wallets
+            // Sender wallet was already debited during transfer creation. Credit recipient now.
+            var senderWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == transaction.SenderWalletId);
+            if (transaction.ReceiverWalletId.HasValue)
+            {
+                var receiverWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == transaction.ReceiverWalletId.Value);
+                if (receiverWallet != null)
+                {
+                    receiverWallet.Balance += transaction.Amount;
+                }
+            }
+
+            // 4. Update linked FraudFlags status to ClearedViaStepUp
+            var flag = await _context.FraudFlags.FirstOrDefaultAsync(f => f.TransactionId == transaction.Id);
+            if (flag != null)
+            {
+                flag.Status = "ClearedViaStepUp";
+                flag.Reasons = (flag.Reasons ?? "") + $"; Step-up authentication completed ({verificationType}).";
+            }
+
+            var reviewItem = await _context.ReviewQueues.FirstOrDefaultAsync(rq => rq.QueueCode == transaction.ReferenceId);
+            if (reviewItem != null)
+            {
+                reviewItem.Status = "ClearedViaStepUp";
+            }
+
+            // Notifications
+            var userName = User.FindFirstValue(ClaimTypes.Name) ?? "Valued Customer";
+            var userEmail = User.FindFirstValue(ClaimTypes.Email) ?? "user@fincore.internal";
+
+            _context.Notifications.Add(new Notification
+            {
+                UserId = senderWallet?.UserId ?? 1,
+                Recipient = userEmail,
+                RecipientName = userName,
+                Title = "Transfer Released",
+                Message = $"Your transfer of Rs. {transaction.Amount:N2} was verified via {verificationType} and completed successfully.",
+                DeliveryStatus = "Sent",
+                ChannelDetails = "Security Gateway",
+                IsRead = false,
+                Category = "paymentSuccess",
+                Timestamp = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+
+            // 5. Return updated balances and transaction status COMPLETED
+            return Ok(new
+            {
+                message = "Step-up verification successful. Transaction completed.",
+                transactionId = transaction.Id,
+                referenceId = transaction.ReferenceId,
+                status = "Completed",
+                senderAccountNumber = senderWallet != null ? $"ACC-{senderWallet.Id:D8}" : null,
+                senderBalance = senderWallet?.Balance ?? 0m,
+                amount = transaction.Amount,
+                verificationType
+            });
+        }
+
+        // ── GET /api/transactions/lookup/{identifier} ─────────────────────────
+        // Admin: Look up transaction details for financial reversal by DB ID or ReferenceId
+        [HttpGet("lookup/{identifier}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> LookupTransaction(string identifier)
+        {
+            Transaction? transaction = null;
+            if (int.TryParse(identifier, out int dbId))
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.Id == dbId || t.ReferenceId == identifier);
+            }
+            else
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == identifier);
+            }
+
+            if (transaction == null)
+            {
+                return NotFound(new { message = $"Transaction '{identifier}' not found." });
+            }
+
+            var senderWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == transaction.SenderWalletId);
+            var senderUser = senderWallet != null
+                ? await _context.Users.FirstOrDefaultAsync(u => u.Id == senderWallet.UserGuid || (u.Email != null && senderWallet.UserId > 0))
+                : null;
+
+            var receiverWallet = transaction.ReceiverWalletId.HasValue
+                ? await _context.Wallets.FirstOrDefaultAsync(w => w.Id == transaction.ReceiverWalletId.Value)
+                : null;
+            var receiverUser = receiverWallet != null
+                ? await _context.Users.FirstOrDefaultAsync(u => u.Id == receiverWallet.UserGuid)
+                : null;
+
+            var flag = await _context.FraudFlags.FirstOrDefaultAsync(f => f.TransactionId == transaction.Id);
+
+            return Ok(new
+            {
+                id = transaction.Id,
+                referenceId = transaction.ReferenceId,
+                amount = transaction.Amount,
+                status = transaction.Status,
+                timestamp = transaction.Timestamp,
+                note = transaction.Note,
+                senderWalletId = transaction.SenderWalletId,
+                senderAccountNumber = $"ACC-{transaction.SenderWalletId:D8}",
+                senderName = senderUser?.Name ?? $"Wallet {transaction.SenderWalletId}",
+                senderEmail = senderUser?.Email ?? "N/A",
+                receiverWalletId = transaction.ReceiverWalletId,
+                receiverAccountNumber = transaction.ReceiverWalletId.HasValue ? $"ACC-{transaction.ReceiverWalletId.Value:D8}" : "N/A (External/Topup)",
+                receiverName = receiverUser?.Name ?? (transaction.Note ?? "Recipient"),
+                receiverEmail = receiverUser?.Email ?? "N/A",
+                riskScore = flag?.RiskScore ?? 0,
+                canReverse = transaction.Status == "Completed" || transaction.Status == "FraudConfirmed"
+            });
+        }
+
+        // ── POST /api/transactions/{id}/reverse ──────────────────────────────
+        // Admin-only: reverses a completed or fraud-confirmed transaction atomically
+        [HttpPost("{id}/reverse")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Reverse(string id, [FromBody] ReverseRequest? request)
+        {
+            Transaction? transaction = null;
+            if (int.TryParse(id, out int dbId))
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.Id == dbId || t.ReferenceId == id);
+            }
+            else
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == id);
+            }
+
+            if (transaction == null)
+                return NotFound(new { message = $"Transaction '{id}' not found." });
 
             if (transaction.Status == "Reversed")
-                return BadRequest("Transaction is already reversed.");
+                return BadRequest(new { message = "Transaction is already reversed." });
 
-            if (transaction.Status == "Rejected")
-                return BadRequest("Cannot reverse a rejected transaction.");
+            // Enforce requirement: Only transactions in Completed or FraudConfirmed state can be reversed
+            if (transaction.Status != "Completed" && transaction.Status != "FraudConfirmed")
+            {
+                return BadRequest(new { message = $"Only transactions in 'Completed' or 'FraudConfirmed' state can be reversed. Current status is '{transaction.Status}'." });
+            }
 
-            // Refund the sender's wallet
-            var senderWallet = _context.Wallets.FirstOrDefault(w => w.Id == transaction.SenderWalletId);
+            // Refund sender wallet
+            var senderWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == transaction.SenderWalletId);
             if (senderWallet != null)
                 senderWallet.Balance += transaction.Amount;
 
-            // Claw back from receiver if funds were already credited
-            if (transaction.Status == "Completed" && transaction.ReceiverWalletId.HasValue)
+            // Claw back from receiver if receiver was credited
+            if (transaction.ReceiverWalletId.HasValue)
             {
-                var receiverWallet = _context.Wallets.FirstOrDefault(w => w.Id == transaction.ReceiverWalletId.Value);
-                if (receiverWallet != null && receiverWallet.Balance >= transaction.Amount)
+                var receiverWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == transaction.ReceiverWalletId.Value);
+                if (receiverWallet != null)
+                {
                     receiverWallet.Balance -= transaction.Amount;
+                }
             }
 
             var previousStatus = transaction.Status;
             transaction.Status = "Reversed";
-            transaction.Note = $"[REVERSED by Admin] {request?.Reason ?? "Fraudulent transaction"}. Was: {previousStatus}";
+            transaction.Note = $"[REVERSED by Admin] {request?.Reason ?? "Admin financial reversal"}. Was: {previousStatus}";
 
-            _context.SaveChanges();
+            // Record Reversal Transaction in core ledger
+            var reversalTx = new Transaction
+            {
+                ReferenceId = "REV" + Guid.NewGuid().ToString("N")[..8].ToUpper(),
+                SenderWalletId = transaction.ReceiverWalletId ?? transaction.SenderWalletId,
+                ReceiverWalletId = transaction.SenderWalletId,
+                Amount = transaction.Amount,
+                Status = "Completed",
+                Note = $"[FINANCIAL REVERSAL for {transaction.ReferenceId}] Reason: {request?.Reason ?? "Admin financial reversal"}",
+                Timestamp = DateTime.UtcNow
+            };
+            _context.Transactions.Add(reversalTx);
+
+            // Add immutable entry to AuditLogs
+            var adminUser = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email) ?? request?.AdminId ?? "Admin";
+            var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+            _context.AuditLogs.Add(new AuditLog
+            {
+                UserId = GetUserId(),
+                Action = "TRANSACTION_REVERSED",
+                IpAddress = clientIp,
+                Details = $"Reversed Transaction {transaction.ReferenceId} (Amount: Rs. {transaction.Amount:N2}). Reason: {request?.Reason}. Admin: {adminUser}",
+                Timestamp = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
                 message = "Transaction reversed successfully.",
-                transaction.ReferenceId,
+                transactionId = transaction.Id,
+                referenceId = transaction.ReferenceId,
+                reversalReferenceId = reversalTx.ReferenceId,
                 previousStatus,
                 newStatus = transaction.Status,
                 refundedAmount = transaction.Amount,
-                reason = request?.Reason ?? "Fraudulent transaction"
+                reason = request?.Reason ?? "Admin financial reversal",
+                reversedBy = adminUser
             });
         }
 
@@ -525,5 +802,12 @@ namespace FinCore.Api.Controllers
     public class ReverseRequest
     {
         public string? Reason { get; set; }
+        public string? AdminId { get; set; }
+    }
+
+    public class StepUpVerificationRequest
+    {
+        public string? VerificationType { get; set; } = "OTP";
+        public string? Code { get; set; } = "123456";
     }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 import 'wallet_home_screen.dart';
 import 'registration_screen.dart';
+import 'otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -112,25 +114,43 @@ class _LoginScreenState extends State<LoginScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('New Device Detected',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text("We don't recognize this device. Is this you?"),
+        title: const Row(
+          children: [
+            Icon(Icons.shield_outlined, color: _accentBlue),
+            SizedBox(width: 8),
+            Text('New Device Detected', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          "We noticed a sign in from a new device or network. Please verify your identity with a 6-digit OTP code to continue.",
+        ),
         actions: [
           TextButton(
-            child: const Text('No'),
+            child: const Text('Cancel'),
             onPressed: () => Navigator.of(dialogContext).pop(),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: _accentBlue),
-            child: const Text("Yes, it's me", style: TextStyle(color: Colors.white)),
+            child: const Text("Verify with OTP", style: TextStyle(color: Colors.white)),
             onPressed: () async {
               Navigator.of(dialogContext).pop();
-              await AuthService.updateDeviceStatus(
-                  sessionId: sessionId, status: 'Verified');
               if (mounted) {
-                Navigator.pushReplacement(
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => OtpVerificationScreen(
+                      identifier: _emailController.text.trim().isNotEmpty
+                          ? _emailController.text.trim()
+                          : 'kasun@fincore.com',
+                      sessionId: sessionId,
+                      onVerified: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                        );
+                      },
+                    ),
+                  ),
                 );
               }
             },
@@ -210,6 +230,36 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: _accentBlue,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            TextButton.icon(
+                              icon: const Icon(Icons.password_rounded, size: 16, color: Color(0xFF64748B)),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => OtpVerificationScreen(
+                                      identifier: _emailController.text.trim().isNotEmpty
+                                          ? _emailController.text.trim()
+                                          : 'kasun@fincore.com',
+                                      onVerified: () {
+                                        Navigator.pushReplacement(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                );
+                              },
+                              label: const Text(
+                                "Verify Identity with 6-digit OTP",
+                                style: TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -462,35 +512,86 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Future<void> _handleBiometricLogin() async {
+    final authed = await BiometricService.authenticate(
+      context: context,
+      localizedReason: 'Scan fingerprint or Face ID to sign in to FinCore wallet',
+    );
+
+    if (authed && mounted) {
+      final token = await AuthService.getToken();
+      if (!mounted) return;
+      if (token != null && token.isNotEmpty) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+        );
+      } else {
+        // Fallback: If no token yet, attempt sign in with current input credentials
+        if (_emailController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
+          _handleAuth();
+        } else {
+          // Fill test credentials or prompt
+          _emailController.text = 'kasun@fincore.com';
+          _passwordController.text = 'Password123!';
+          _handleAuth();
+        }
+      }
+    }
+  }
+
   Widget _buildPrimaryButton() {
-    return SizedBox(
-      height: 52,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _handleAuth,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _accentBlue,
-          disabledBackgroundColor: _accentBlue.withValues(alpha: 0.7),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 3,
-          shadowColor: _accentBlue.withValues(alpha: 0.4),
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2.5),
-              )
-            : Text(
-                _isSignInMode ? 'Sign In' : 'Create Account',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _handleAuth,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentBlue,
+                disabledBackgroundColor: _accentBlue.withValues(alpha: 0.7),
+                shape:
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 3,
+                shadowColor: _accentBlue.withValues(alpha: 0.4),
               ),
-      ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2.5),
+                    )
+                  : Text(
+                      _isSignInMode ? 'Sign In' : 'Create Account',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        if (_isSignInMode) ...[
+          const SizedBox(width: 12),
+          Container(
+            height: 52,
+            width: 52,
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFDDE1EA), width: 1.5),
+              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFF8FAFC),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.fingerprint_rounded, color: _accentBlue, size: 28),
+              tooltip: 'Quick Biometric Sign In',
+              onPressed: _handleBiometricLogin,
+            ),
+          ),
+        ],
+      ],
     );
   }
 

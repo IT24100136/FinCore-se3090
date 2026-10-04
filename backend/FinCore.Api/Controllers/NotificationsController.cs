@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using FinCore.Api.Data;
 using FinCore.Api.DTOs;
@@ -24,6 +25,116 @@ namespace FinCore.Api.Controllers
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         }
 
+        private (Guid? userGuid, int deterministicIntId) ResolveUserIdentity()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("UserId");
+            if (Guid.TryParse(userIdStr, out Guid userGuid))
+            {
+                return (userGuid, DbInitializer.GetDeterministicUserId(userGuid));
+            }
+
+            if (int.TryParse(userIdStr, out int intId))
+            {
+                return (null, intId);
+            }
+
+            return (null, 1);
+        }
+
+        /// <summary>
+        /// GET /api/notifications
+        /// Retrieves notifications for the current authenticated user (or specified query params).
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetMyNotifications([FromQuery] int? userId)
+        {
+            var (userGuid, resolvedIntId) = ResolveUserIdentity();
+            int targetUserId = userId ?? resolvedIntId;
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+
+            var query = _context.Notifications.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                query = query.Where(n => n.UserId == targetUserId || n.Recipient == userEmail);
+            }
+            else
+            {
+                query = query.Where(n => n.UserId == targetUserId);
+            }
+
+            var notifications = await query
+                .OrderByDescending(n => n.Timestamp)
+                .Take(50)
+                .ToListAsync();
+
+            if (!notifications.Any() && targetUserId > 0)
+            {
+                // Seed starter notification if completely empty for this user
+                notifications = GetInitialSeedNotifications(targetUserId);
+                _context.Notifications.AddRange(notifications);
+                await _context.SaveChangesAsync();
+            }
+
+            int unreadCount = notifications.Count(n => !n.IsRead);
+
+            return Ok(new
+            {
+                unreadCount,
+                items = notifications
+            });
+        }
+
+        /// <summary>
+        /// PUT /api/notifications/{id}/read
+        /// Marks a specific notification as read.
+        /// </summary>
+        [HttpPut("{id}/read")]
+        public async Task<IActionResult> MarkAsRead(int id)
+        {
+            var notification = await _context.Notifications.FirstOrDefaultAsync(n => n.Id == id);
+            if (notification == null)
+            {
+                return NotFound(new { message = "Notification not found." });
+            }
+
+            notification.IsRead = true;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, id, message = "Notification marked as read." });
+        }
+
+        /// <summary>
+        /// PUT /api/notifications/read-all
+        /// Marks all notifications for the active user as read.
+        /// </summary>
+        [HttpPut("read-all")]
+        public async Task<IActionResult> MarkAllAsRead()
+        {
+            var (userGuid, targetUserId) = ResolveUserIdentity();
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+
+            var query = _context.Notifications.Where(n => !n.IsRead);
+            if (!string.IsNullOrWhiteSpace(userEmail))
+            {
+                query = query.Where(n => n.UserId == targetUserId || n.Recipient == userEmail);
+            }
+            else
+            {
+                query = query.Where(n => n.UserId == targetUserId);
+            }
+
+            var unreadItems = await query.ToListAsync();
+            foreach (var item in unreadItems)
+            {
+                item.IsRead = true;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, markedCount = unreadItems.Count });
+        }
+
         /// <summary>
         /// Sends a notification (SMS/Email), logs dispatch metrics, and saves to database.
         /// POST /api/notifications/send
@@ -43,6 +154,10 @@ namespace FinCore.Api.Controllers
                 request.Type,
                 request.Message);
 
+            notification.Title = string.IsNullOrWhiteSpace(request.Title) ? "FinCore Security Notice" : request.Title;
+            notification.Category = request.Category ?? "info";
+            notification.IsRead = false;
+
             _context.Notifications.Add(notification);
 
             // Audit log for notification dispatch
@@ -61,20 +176,19 @@ namespace FinCore.Api.Controllers
         }
 
         /// <summary>
-        /// Retrieves notification log history for a specific user.
+        /// Retrieves notification log history for a specific user ID.
         /// GET /api/notifications/{userId}
         /// </summary>
-        [HttpGet("{userId}")]
+        [HttpGet("{userId:int}")]
         public async Task<IActionResult> GetNotifications(int userId)
         {
             var notifications = await _context.Notifications
-                .Where(n => n.UserId == userId || userId == 1) // Default to user or mock list
+                .Where(n => n.UserId == userId || userId == 1)
                 .OrderByDescending(n => n.Timestamp)
                 .ToListAsync();
 
             if (!notifications.Any())
             {
-                // Seed initial notification telemetry if empty
                 notifications = GetInitialSeedNotifications(userId);
                 _context.Notifications.AddRange(notifications);
                 await _context.SaveChangesAsync();
@@ -90,74 +204,32 @@ namespace FinCore.Api.Controllers
                 new Notification
                 {
                     UserId = userId,
-                    Recipient = "eleanor.vance@fincore-user.com",
-                    RecipientName = "Eleanor Vance",
-                    Type = "Email",
-                    Message = "Your FinCore security verification code is 849-201. Valid for 5 minutes.",
+                    Recipient = "kasun@fincore.com",
+                    RecipientName = "Kasun Perera",
+                    Title = "Welcome to FinCore",
+                    Type = "InApp",
+                    Message = "Your digital wallet has been provisioned with an initial demo balance of Rs. 100,000.00.",
                     DeliveryStatus = "Sent",
-                    ChannelDetails = "Mailgun SMTP Relay (sg-east-1)",
-                    LatencyMs = 340,
-                    Timestamp = DateTime.UtcNow.AddMinutes(-25)
+                    ChannelDetails = "System Provisioning",
+                    Category = "info",
+                    IsRead = false,
+                    LatencyMs = 120,
+                    Timestamp = DateTime.UtcNow.AddMinutes(-10)
                 },
                 new Notification
                 {
                     UserId = userId,
-                    Recipient = "+1 (555) 382-9102",
-                    RecipientName = "Marcus Sterling",
-                    Type = "SMS",
-                    Message = "FinCore Alert: Unrecognized login attempt from Frankfurt, DE. Reply STOP if not you.",
+                    Recipient = "kasun@fincore.com",
+                    RecipientName = "Kasun Perera",
+                    Title = "Security Protocol Active",
+                    Type = "InApp",
+                    Message = "AI-powered transaction anomaly monitoring and biometric step-up authentication are enabled.",
                     DeliveryStatus = "Sent",
-                    ChannelDetails = "Twilio SMS Gateway",
-                    LatencyMs = 620,
-                    Timestamp = DateTime.UtcNow.AddMinutes(-47)
-                },
-                new Notification
-                {
-                    UserId = userId,
-                    Recipient = "sophia.chen@techventures.io",
-                    RecipientName = "Sophia Chen",
-                    Type = "Email",
-                    Message = "Account Status Warning: Your FinCore account has been temporarily restricted due to suspicious multi-device activity.",
-                    DeliveryStatus = "Failed",
-                    ChannelDetails = "SendGrid API (Error 550: Recipient mailbox full)",
-                    LatencyMs = 1250,
+                    ChannelDetails = "Security Engine",
+                    Category = "info",
+                    IsRead = false,
+                    LatencyMs = 85,
                     Timestamp = DateTime.UtcNow.AddHours(-1)
-                },
-                new Notification
-                {
-                    UserId = userId,
-                    Recipient = "+1 (555) 902-1488",
-                    RecipientName = "David K. Ross",
-                    Type = "SMS",
-                    Message = "Wire transfer of $45,000.00 to Apex Global has been processed successfully.",
-                    DeliveryStatus = "Sent",
-                    ChannelDetails = "Twilio SMS Gateway",
-                    LatencyMs = 410,
-                    Timestamp = DateTime.UtcNow.AddHours(-2)
-                },
-                new Notification
-                {
-                    UserId = userId,
-                    Recipient = "amara.okafor@horizon-pay.com",
-                    RecipientName = "Amara Okafor",
-                    Type = "Email",
-                    Message = "Monthly Statement Available: Your September 2026 FinCore statement is ready to view.",
-                    DeliveryStatus = "Sent",
-                    ChannelDetails = "Mailgun SMTP Relay (sg-east-1)",
-                    LatencyMs = 290,
-                    Timestamp = DateTime.UtcNow.AddHours(-4)
-                },
-                new Notification
-                {
-                    UserId = userId,
-                    Recipient = "+44 7700 900123",
-                    RecipientName = "Julian Thorne",
-                    Type = "SMS",
-                    Message = "FinCore Security: Your 2FA security settings were updated from a new device.",
-                    DeliveryStatus = "Failed",
-                    ChannelDetails = "AWS SNS (Error 400: Invalid phone number routing)",
-                    LatencyMs = 2100,
-                    Timestamp = DateTime.UtcNow.AddHours(-6)
                 }
             };
         }

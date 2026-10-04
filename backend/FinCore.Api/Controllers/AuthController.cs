@@ -37,11 +37,61 @@ namespace FinCore.Api.Controllers
 
             var normalizedEmail = request.Email.Trim().ToLower();
 
+            // 1. Duplicate Email Check
             var existingUser = await _context.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail);
             if (existingUser)
             {
                 return BadRequest(new { message = "User with this email already exists." });
             }
+
+            // 2. Duplicate Employee ID Check (if provided for staff)
+            var cleanEmployeeId = !string.IsNullOrWhiteSpace(request.EmployeeId)
+                ? request.EmployeeId.Trim().ToUpper()
+                : null;
+
+            if (!string.IsNullOrWhiteSpace(cleanEmployeeId))
+            {
+                var employeeIdExists = await _context.Users.AnyAsync(u =>
+                    u.EmployeeId != null && u.EmployeeId.ToUpper() == cleanEmployeeId);
+                if (employeeIdExists)
+                {
+                    return BadRequest(new { message = $"Employee ID '{cleanEmployeeId}' is already registered to another staff member." });
+                }
+            }
+
+            // 3. Password Complexity Policy Check
+            // Min 8 chars, at least 1 uppercase, 1 digit, 1 special character
+            if (request.Password.Length < 8 ||
+                !request.Password.Any(char.IsUpper) ||
+                !request.Password.Any(char.IsDigit) ||
+                !request.Password.Any(ch => !char.IsLetterOrDigit(ch)))
+            {
+                return BadRequest(new { message = "Password must be at least 8 characters and contain at least one uppercase letter, one number, and one special character." });
+            }
+
+            // 4. Confirm Password Match Check
+            if (!string.IsNullOrWhiteSpace(request.ConfirmPassword) && request.Password != request.ConfirmPassword)
+            {
+                return BadRequest(new { message = "Passwords do not match." });
+            }
+
+            // 5. Role Mapping
+            var rawRole = (request.Role ?? "Customer").Trim();
+            string resolvedRole = "Customer";
+            if (rawRole.Equals("Fraud Analyst", StringComparison.OrdinalIgnoreCase) ||
+                rawRole.Equals("Analyst", StringComparison.OrdinalIgnoreCase))
+            {
+                resolvedRole = "Analyst";
+            }
+            else if (rawRole.Equals("System Admin", StringComparison.OrdinalIgnoreCase) ||
+                     rawRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                resolvedRole = "Admin";
+            }
+
+            var displayName = !string.IsNullOrWhiteSpace(request.FullName)
+                ? request.FullName.Trim()
+                : (!string.IsNullOrWhiteSpace(request.Name) ? request.Name.Trim() : normalizedEmail.Split('@')[0]);
 
             var cardLastFour = !string.IsNullOrWhiteSpace(request.CardNumber) && request.CardNumber.Length >= 4
                 ? request.CardNumber[^4..]
@@ -50,10 +100,12 @@ namespace FinCore.Api.Controllers
             var user = new User
             {
                 Id = Guid.NewGuid(),
-                Name = !string.IsNullOrWhiteSpace(request.Name) ? request.Name : normalizedEmail.Split('@')[0],
+                Name = displayName,
                 Email = normalizedEmail,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                Role = !string.IsNullOrWhiteSpace(request.Role) ? request.Role : "Customer",
+                Role = resolvedRole,
+                EmployeeId = cleanEmployeeId,
+                Department = !string.IsNullOrWhiteSpace(request.Department) ? request.Department.Trim() : null,
                 PhoneNumber = request.PhoneNumber,
                 PinHash = !string.IsNullOrWhiteSpace(request.Pin) ? BCrypt.Net.BCrypt.HashPassword(request.Pin) : null,
                 BiometricEnabled = request.BiometricEnabled,
@@ -77,35 +129,45 @@ namespace FinCore.Api.Controllers
 
             _context.Users.Add(user);
 
-            // Automatically provision wallet for the newly registered customer
-            int walletUserId = Math.Abs(user.Id.ToString().GetHashCode());
-            var existingWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == walletUserId);
-            if (existingWallet == null)
+            // Automatically provision wallet for customers
+            Wallet? userWallet = null;
+            if (resolvedRole == "Customer")
             {
-                var wallet = new Wallet
+                int walletUserId = DbInitializer.GetDeterministicUserId(user.Id);
+                userWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserGuid == user.Id || w.UserId == walletUserId);
+                if (userWallet == null)
                 {
-                    UserId = walletUserId,
-                    Balance = 100000m, // Starter test balance in LKR
-                    Currency = "LKR",
-                    CreatedAt = DateTime.UtcNow
-                };
-                _context.Wallets.Add(wallet);
+                    userWallet = new Wallet
+                    {
+                        UserId = walletUserId,
+                        UserGuid = user.Id,
+                        Balance = 100000m, // Starter test balance in LKR
+                        Currency = "LKR",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.Wallets.Add(userWallet);
+                }
             }
 
             await _context.SaveChangesAsync();
 
             var token = GenerateJwtToken(user);
 
-            return Ok(new
+            return Ok(new AuthResponseDto
             {
-                message = "User registered successfully with verified KYC profile",
-                userId = user.Id,
-                email = user.Email,
-                name = user.Name,
-                phoneNumber = user.PhoneNumber,
-                role = user.Role,
-                kycStatus = user.KycStatus,
-                token = token
+                Token = token,
+                Message = "Registration successful",
+                User = new AuthUserDto
+                {
+                    Id = user.Id,
+                    FullName = user.Name,
+                    Email = user.Email,
+                    Role = user.Role,
+                    EmployeeId = user.EmployeeId,
+                    Department = user.Department,
+                    PhoneNumber = user.PhoneNumber,
+                    WalletId = userWallet?.Id
+                }
             });
         }
 
@@ -117,18 +179,48 @@ namespace FinCore.Api.Controllers
                 return BadRequest(ModelState);
             }
 
-            var normalizedEmail = request.Email.Trim().ToLower();
+            var identifier = request.Email.Trim().ToLower();
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+            // Match by Email OR Employee ID
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
+                u.Email.ToLower() == identifier ||
+                (u.EmployeeId != null && u.EmployeeId.ToLower() == identifier));
+
             if (user == null)
             {
-                return Unauthorized(new { message = "Invalid email or password." });
+                return Unauthorized(new { message = "Invalid email, badge ID, or password." });
             }
 
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
             if (!isPasswordValid)
             {
-                return Unauthorized(new { message = "Invalid email or password." });
+                return Unauthorized(new { message = "Invalid email, badge ID, or password." });
+            }
+
+            // Ensure customer has a wallet and fetch wallet ID
+            Wallet? customerWallet = null;
+            if (user.Role == "Customer")
+            {
+                int walletUserId = DbInitializer.GetDeterministicUserId(user.Id);
+                customerWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserGuid == user.Id || w.UserId == walletUserId);
+                if (customerWallet == null)
+                {
+                    customerWallet = new Wallet
+                    {
+                        UserId = walletUserId,
+                        UserGuid = user.Id,
+                        Balance = 100000m,
+                        Currency = "LKR",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _context.Wallets.Add(customerWallet);
+                    await _context.SaveChangesAsync();
+                }
+                else if (!customerWallet.UserGuid.HasValue)
+                {
+                    customerWallet.UserGuid = user.Id;
+                    await _context.SaveChangesAsync();
+                }
             }
 
             var token = GenerateJwtToken(user);
@@ -136,8 +228,84 @@ namespace FinCore.Api.Controllers
             return Ok(new AuthResponseDto
             {
                 Token = token,
-                Message = "Login successful"
+                Message = "Login successful",
+                User = new AuthUserDto
+                {
+                    Id = user.Id,
+                    FullName = user.Name,
+                    Email = user.Email,
+                    Role = user.Role,
+                    EmployeeId = user.EmployeeId,
+                    Department = user.Department,
+                    PhoneNumber = user.PhoneNumber,
+                    WalletId = customerWallet?.Id
+                }
             });
+        }
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Code, DateTime ExpiresAt)> _otpStore = new();
+
+        [HttpPost("otp/send")]
+        public IActionResult SendOtp([FromBody] SendOtpRequestDto request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Identifier))
+            {
+                return BadRequest(new { message = "Identifier (phone or email) is required." });
+            }
+
+            var cleanId = request.Identifier.Trim().ToLower();
+            var code = Random.Shared.Next(100000, 999999).ToString();
+            var expiresAt = DateTime.UtcNow.AddMinutes(5);
+
+            _otpStore[cleanId] = (code, expiresAt);
+
+            Console.WriteLine($"[FinCore OTP Gateway] Generated OTP for {cleanId}: {code} (Valid for 5 mins)");
+
+            return Ok(new
+            {
+                success = true,
+                message = $"Verification code dispatched to {request.Identifier}.",
+                expiresInSeconds = 300,
+                // Provided for local testing and frictionless demo verification
+                debugOtp = code,
+                fallbackOtp = "123456"
+            });
+        }
+
+        [HttpPost("otp/verify")]
+        public IActionResult VerifyOtp([FromBody] VerifyOtpRequestDto request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Identifier) || string.IsNullOrWhiteSpace(request.Code))
+            {
+                return BadRequest(new { success = false, message = "Identifier and code are required." });
+            }
+
+            var cleanId = request.Identifier.Trim().ToLower();
+            var inputCode = request.Code.Trim();
+
+            // Universal test/demo code bypass
+            if (inputCode == "123456")
+            {
+                _otpStore.TryRemove(cleanId, out _);
+                return Ok(new { success = true, message = "OTP verified successfully (Demo verification)." });
+            }
+
+            if (_otpStore.TryGetValue(cleanId, out var entry))
+            {
+                if (DateTime.UtcNow > entry.ExpiresAt)
+                {
+                    _otpStore.TryRemove(cleanId, out _);
+                    return BadRequest(new { success = false, message = "Verification code has expired. Please request a new code." });
+                }
+
+                if (entry.Code == inputCode)
+                {
+                    _otpStore.TryRemove(cleanId, out _);
+                    return Ok(new { success = true, message = "OTP verified successfully." });
+                }
+            }
+
+            return BadRequest(new { success = false, message = "Invalid verification code. Please check and try again." });
         }
 
         [Microsoft.AspNetCore.Authorization.Authorize]
@@ -194,9 +362,14 @@ namespace FinCore.Api.Controllers
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim("UserId", user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.Name),
+                new Claim("name", user.Name),
                 new Claim(ClaimTypes.Role, user.Role),
+                new Claim("role", user.Role),
                 new Claim("Role", user.Role),
+                new Claim("employeeId", user.EmployeeId ?? string.Empty),
+                new Claim("department", user.Department ?? string.Empty),
+                new Claim("UserId", user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 

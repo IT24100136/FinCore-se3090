@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace FinCore.Api.DTOs
@@ -9,12 +10,19 @@ namespace FinCore.Api.DTOs
         public string Email { get; set; } = string.Empty;
 
         [Required]
-        [MinLength(6)]
+        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
         public string Password { get; set; } = string.Empty;
 
-        public string? Name { get; set; }
+        public string? ConfirmPassword { get; set; }
 
-        public string Role { get; set; } = "Customer";
+        public string? Name { get; set; }
+        public string? FullName { get; set; }
+
+        public string Role { get; set; } = "Customer"; // Customer, Analyst, Admin
+
+        // Staff Corporate Information
+        public string? EmployeeId { get; set; }
+        public string? Department { get; set; }
 
         // 1. Account Credentials & Security
         public string? PhoneNumber { get; set; }
@@ -47,6 +55,8 @@ namespace FinCore.Api.DTOs
         public string Name { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
+        public string? EmployeeId { get; set; }
+        public string? Department { get; set; }
         public string? PhoneNumber { get; set; }
         public bool BiometricEnabled { get; set; }
         public DateTime? DateOfBirth { get; set; }
@@ -67,17 +77,49 @@ namespace FinCore.Api.DTOs
 
     public class LoginRequestDto
     {
-        [Required]
-        [EmailAddress]
-        public string Email { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Email or Staff Badge ID is required.")]
+        public string Email { get; set; } = string.Empty; // Accepts Email or EmployeeId
 
-        [Required]
+        [Required(ErrorMessage = "Password is required.")]
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class AuthUserDto
+    {
+        public Guid Id { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public string? EmployeeId { get; set; }
+        public string? Department { get; set; }
+        public string? PhoneNumber { get; set; }
+        public int? WalletId { get; set; }
     }
 
     public class AuthResponseDto
     {
         public string Token { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
+        public AuthUserDto? User { get; set; }
+    }
+
+    public class SendOtpRequestDto
+    {
+        [Required]
+        public string Identifier { get; set; } = string.Empty; // Email or Phone number
+        public string? Purpose { get; set; } = "LOGIN"; // LOGIN, REGISTER, TRANSACTION
+    }
+
+    public class VerifyOtpRequestDto
+    {
+        [Required]
+        public string Identifier { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(6, MinimumLength = 6, ErrorMessage = "OTP must be 6 digits.")]
+        public string Code { get; set; } = string.Empty;
+
+        public string? Purpose { get; set; } = "LOGIN";
     }
 }
+

@@ -449,6 +449,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 recipient: tx['note'] ?? '',
                 status: status,
                 riskScore: (tx['riskScore'] as num?)?.toInt(),
+                senderAccountNumber: tx['senderAccountNumber'] ?? 'ACC-00000001',
+                transactionId: tx['transactionId'] ?? tx['id'],
               ),
             ),
           );
@@ -504,7 +506,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${_formatDate(timestamp)}  ·  ${tx['referenceId'] ?? ''}',
+                    '${tx['senderAccountNumber'] ?? 'ACC-00000001'}  ·  ${_formatDate(timestamp)}',
                     style: const TextStyle(
                         fontSize: 11, color: Color(0xFF8A94A6)),
                   ),

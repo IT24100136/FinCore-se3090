@@ -3,6 +3,15 @@ import axios from 'axios';
 const FRAUD_API_URL = '/api/fraud';
 const REVIEWS_API_URL = '/api/reviews';
 
+// Ensure Authorization header is automatically passed for all requests
+axios.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Initial pre-configured seed rules matching FinCore Fraud Engine specification
 export const INITIAL_RULES = [
   {
@@ -489,5 +498,18 @@ export const fraudService = {
       { status: 'Rejected', count: 24 },
       { status: 'Under Review', count: 18 }
     ];
+  },
+
+  /**
+   * Fetch immutable Rule Audit Logs (Section 6)
+   */
+  getRuleAuditLogs: async () => {
+    try {
+      const response = await axios.get(`${FRAUD_API_URL}/rules/audit-logs`);
+      return response.data || [];
+    } catch (err) {
+      console.info('Backend rule audit logs fallback:', err.message);
+      return [];
+    }
   }
 };

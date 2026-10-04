@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/wallet_service.dart';
+import '../services/biometric_service.dart';
+import '../widgets/step_up_challenge_sheet.dart';
 import 'transaction_status_screen.dart';
 
 class SendMoneyScreen extends StatefulWidget {
@@ -16,6 +18,36 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
   final _amountController = TextEditingController(text: '0');
   final _noteController = TextEditingController();
   bool _isLoading = false;
+
+  String _senderAccountNumber = 'ACC-00000001';
+  double _availableBalance = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSenderDetails();
+  }
+
+  Future<void> _loadSenderDetails() async {
+    try {
+      final acc = await _walletService.getAccountNumber();
+      final bal = await _walletService.getBalance();
+      if (mounted) {
+        setState(() {
+          _senderAccountNumber = acc;
+          _availableBalance = bal;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _formatAmount(double v) {
+    final s = v.toStringAsFixed(2);
+    final parts = s.split('.');
+    final intPart = parts[0].replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    return '$intPart.${parts[1]}';
+  }
 
   double get _currentAmount =>
       double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
@@ -35,6 +67,26 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
       return;
     }
 
+    // Step-up Biometric verification for transfers >= Rs. 10,000
+    if (_currentAmount >= 10000) {
+      final verified = await BiometricService.authenticate(
+        context: context,
+        localizedReason:
+            'Authenticate to authorize transaction of Rs. ${_currentAmount.toStringAsFixed(2)}',
+      );
+      if (!verified) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Transaction cancelled: Biometric authorization required.'),
+              backgroundColor: Color(0xFFD97706),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
     try {
       final result = await _walletService.transfer(
@@ -45,7 +97,48 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
             : null,
       );
 
+      final senderAcc = (result['senderAccountNumber'] as String?) ?? _senderAccountNumber;
+      final riskScore = (result['riskScore'] as num?)?.toInt() ?? 0;
+      final rawStatus = (result['status'] as String?) ?? 'Completed';
+      final isDualApproval = rawStatus == 'PendingSecondApproval' || _currentAmount >= 75000;
+      final requiresStepUp = (result['requiresStepUp'] == true ||
+          (riskScore >= 50 && riskScore < 70 && (rawStatus == 'Held' || rawStatus == 'Pending'))) && !isDualApproval;
+
       if (!mounted) return;
+
+      if (requiresStepUp) {
+        final txId = result['transactionId'] ?? result['id'] ?? result['referenceId'];
+        final stepUpResult = await StepUpChallengeSheet.show(
+          context,
+          transactionId: txId,
+          referenceId: result['referenceId'] ?? 'N/A',
+          amount: _currentAmount,
+          recipient: recipient,
+          senderAccountNumber: senderAcc,
+          riskScore: riskScore,
+        );
+
+        if (!mounted) return;
+
+        if (stepUpResult != null && (stepUpResult['status'] == 'Completed' || stepUpResult['verified'] == true)) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TransactionStatusScreen(
+                referenceId: stepUpResult['referenceId'] ?? result['referenceId'] ?? 'N/A',
+                amount: (stepUpResult['amount'] as num?)?.toDouble() ?? _currentAmount,
+                recipient: recipient,
+                status: 'Completed',
+                riskScore: riskScore,
+                senderAccountNumber: stepUpResult['senderAccountNumber'] ?? senderAcc,
+                message: stepUpResult['message'] ?? 'Step-up verification successful. Transfer completed.',
+              ),
+            ),
+          );
+          return;
+        }
+      }
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -55,6 +148,7 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
             recipient: result['recipient'] ?? recipient,
             status: result['status'] ?? 'Completed',
             riskScore: (result['riskScore'] as num?)?.toInt(),
+            senderAccountNumber: senderAcc,
             message: result['message'] as String?,
           ),
         ),
@@ -106,7 +200,56 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              // Sender Formal Account Card
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_wallet_outlined, size: 20, color: Color(0xFF3B6FE8)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'FROM FORMAL ACCOUNT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 0.8,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _senderAccountNumber,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      'Bal: Rs. ${_formatAmount(_availableBalance)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF16A34A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               // Recipient Field
               _buildLabel('Recipient'),
               const SizedBox(height: 6),

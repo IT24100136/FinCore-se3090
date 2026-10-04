@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace FinCore.Api.Models
@@ -7,9 +8,12 @@ namespace FinCore.Api.Models
         [Key]
         public int Id { get; set; }
         
-        // This links directly to the User table Shalitha built
+        // Deterministic integer ID or legacy user ID
         public int UserId { get; set; } 
         
+        // Exact User GUID for permanent association
+        public Guid? UserGuid { get; set; }
+
         public decimal Balance { get; set; } = 0.00m;
         
         // Fixed to single currency as defined in the scope lock

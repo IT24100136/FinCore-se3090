@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import '../widgets/step_up_challenge_sheet.dart';
 import 'held_transactions_screen.dart';
 import 'wallet_home_screen.dart';
 
-class TransactionStatusScreen extends StatelessWidget {
+class TransactionStatusScreen extends StatefulWidget {
   final String referenceId;
   final double amount;
   final String recipient;
   final String status;
   final int? riskScore;
   final String? message;
+  final String? senderAccountNumber;
+  final dynamic transactionId;
 
   const TransactionStatusScreen({
     super.key,
@@ -18,7 +21,28 @@ class TransactionStatusScreen extends StatelessWidget {
     required this.status,
     this.riskScore,
     this.message,
+    this.senderAccountNumber,
+    this.transactionId,
   });
+
+  @override
+  State<TransactionStatusScreen> createState() => _TransactionStatusScreenState();
+}
+
+class _TransactionStatusScreenState extends State<TransactionStatusScreen> {
+  late String _currentStatus;
+  late String? _currentMessage;
+  late String _senderAccount;
+  late String _referenceId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentStatus = widget.status;
+    _currentMessage = widget.message;
+    _senderAccount = widget.senderAccountNumber ?? 'ACC-00000001';
+    _referenceId = widget.referenceId;
+  }
 
   String _formatAmount(double v) {
     final s = v.toStringAsFixed(2);
@@ -29,19 +53,60 @@ class TransactionStatusScreen extends StatelessWidget {
   }
 
   bool get _isCompleted =>
-      status.toUpperCase() == 'COMPLETED' || status.toUpperCase() == 'APPROVED';
+      _currentStatus.toUpperCase() == 'COMPLETED' || _currentStatus.toUpperCase() == 'APPROVED';
 
   bool get _isPendingSecondApproval =>
-      status.toUpperCase() == 'PENDINGSECONDAPPROVAL';
+      _currentStatus.toUpperCase() == 'PENDINGSECONDAPPROVAL';
 
   bool get _isHeld =>
       !_isCompleted &&
       !_isPendingSecondApproval &&
-      status.toUpperCase() != 'REJECTED' &&
-      status.toUpperCase() != 'FAILED';
+      _currentStatus.toUpperCase() != 'REJECTED' &&
+      _currentStatus.toUpperCase() != 'FAILED';
 
   bool get _isRejected =>
-      status.toUpperCase() == 'REJECTED' || status.toUpperCase() == 'FAILED';
+      _currentStatus.toUpperCase() == 'REJECTED' || _currentStatus.toUpperCase() == 'FAILED';
+
+  bool get _canStepUp =>
+      _isHeld &&
+      widget.riskScore != null &&
+      widget.riskScore! >= 50 &&
+      widget.riskScore! < 70;
+
+  Future<void> _handleStepUpChallenge() async {
+    final txId = widget.transactionId ?? _referenceId;
+    final res = await StepUpChallengeSheet.show(
+      context,
+      transactionId: txId,
+      referenceId: _referenceId,
+      amount: widget.amount,
+      recipient: widget.recipient,
+      senderAccountNumber: _senderAccount,
+      riskScore: widget.riskScore ?? 55,
+    );
+
+    if (res != null && (res['verified'] == true || res['status'] == 'Completed')) {
+      if (mounted) {
+        setState(() {
+          _currentStatus = 'Completed';
+          _currentMessage = res['message'] ?? 'Step-up verification completed successfully.';
+          if (res['senderAccountNumber'] != null) {
+            _senderAccount = res['senderAccountNumber'].toString();
+          }
+          if (res['referenceId'] != null) {
+            _referenceId = res['referenceId'].toString();
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Identity verified! Hold cleared and transfer completed.'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -142,9 +207,10 @@ class TransactionStatusScreen extends StatelessWidget {
                       ),
                     ),
                     const Divider(height: 1, color: Color(0xFFEEF0F5)),
-                    _buildDetailRow('Reference ID', referenceId, valueWeight: FontWeight.bold),
-                    _buildDetailRow('Amount', 'Rs. ${_formatAmount(amount)} LKR', valueWeight: FontWeight.bold),
-                    _buildDetailRow('Recipient', recipient, valueWeight: FontWeight.bold),
+                    _buildDetailRow('Reference ID', _referenceId, valueWeight: FontWeight.bold),
+                    _buildDetailRow('Sender Account', _senderAccount, valueWeight: FontWeight.bold),
+                    _buildDetailRow('Amount', 'Rs. ${_formatAmount(widget.amount)} LKR', valueWeight: FontWeight.bold),
+                    _buildDetailRow('Recipient', widget.recipient, valueWeight: FontWeight.bold),
                     _buildDetailRow('Date / Time', '$dateStr · $timeStr'),
                     _buildStatusRow(),
                     _buildRiskScoreRow(),
@@ -237,7 +303,7 @@ class TransactionStatusScreen extends StatelessWidget {
   }
 
   String _getStatusSubtitle() {
-    if (_isCompleted) return 'Funds have been delivered instantly to $recipient';
+    if (_isCompleted) return 'Funds have been delivered instantly to ${widget.recipient}';
     if (_isPendingSecondApproval) return 'Statutory dual maker-checker authorization required';
     if (_isRejected) return 'The transaction could not be processed';
     return 'Initiated for security review by FinCore fraud prevention';
@@ -310,7 +376,7 @@ class TransactionStatusScreen extends StatelessWidget {
   }
 
   Widget _buildRiskScoreRow() {
-    final effectiveScore = riskScore ?? (_isCompleted ? 12 : 87);
+    final effectiveScore = widget.riskScore ?? (_isCompleted ? 12 : 87);
     final Color scoreColor;
     final String scoreDesc;
 
@@ -375,7 +441,8 @@ class TransactionStatusScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Your transfer of Rs. ${_formatAmount(amount)} LKR to $recipient was evaluated by FinCore AI security pipeline and completed with zero hold. Receipt has been logged.',
+                    _currentMessage ??
+                        'Your transfer of Rs. ${_formatAmount(widget.amount)} LKR to ${widget.recipient} was evaluated by FinCore AI security pipeline and completed successfully. Receipt has been logged.',
                     style: const TextStyle(fontSize: 12, color: Color(0xFF15803D), height: 1.4),
                   ),
                 ],
@@ -438,7 +505,7 @@ class TransactionStatusScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              message ?? 'This transaction was rejected by system risk rules. Any deducted funds will be restored immediately.',
+              _currentMessage ?? 'This transaction was rejected by system risk rules. Any deducted funds will be restored immediately.',
               style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C), height: 1.4),
             ),
           ],
@@ -458,12 +525,16 @@ class TransactionStatusScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children: const [
-                Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 18),
-                SizedBox(width: 6),
+              children: [
+                Icon(
+                  _canStepUp ? Icons.lock_clock_rounded : Icons.warning_amber_rounded,
+                  color: const Color(0xFFE65100),
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
                 Text(
-                  'Why is my transfer on hold?',
-                  style: TextStyle(color: Color(0xFFE65100), fontWeight: FontWeight.bold, fontSize: 13),
+                  _canStepUp ? 'Step-Up Verification Available' : 'Why is my transfer on hold?',
+                  style: const TextStyle(color: Color(0xFFE65100), fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ],
             ),
@@ -474,20 +545,21 @@ class TransactionStatusScreen extends StatelessWidget {
                 children: [
                   const TextSpan(text: 'Your transfer of '),
                   TextSpan(
-                    text: 'Rs. ${_formatAmount(amount)}',
+                    text: 'Rs. ${_formatAmount(widget.amount)}',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE65100)),
                   ),
-                  const TextSpan(
-                    text:
-                        ' is currently paused for security review by our fraud prevention team. Funds have not left your account.',
+                  TextSpan(
+                    text: _canStepUp
+                        ? ' is held pending step-up challenge verification. You can authorize with Biometrics or OTP to clear it immediately.'
+                        : ' is currently paused for security review by our fraud prevention team. Funds have not left your account.',
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 10),
-            const Text(
-              'Expected review time: 15–30 minutes',
-              style: TextStyle(fontSize: 12, color: Color(0xFF8A6200), fontStyle: FontStyle.italic),
+            Text(
+              _canStepUp ? 'Instant clearance available via biometrics/OTP' : 'Expected review time: 15–30 minutes',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF8A6200), fontStyle: FontStyle.italic),
             ),
           ],
         ),
@@ -500,6 +572,27 @@ class TransactionStatusScreen extends StatelessWidget {
     if (_isHeld) {
       return Column(
         children: [
+          if (_canStepUp) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B6FE8),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.fingerprint_rounded, size: 22),
+                label: const Text(
+                  'Complete Step-Up Challenge',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                onPressed: _handleStepUpChallenge,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           SizedBox(
             width: double.infinity,
             height: 48,
