@@ -130,6 +130,12 @@ export default function AuditTrailsPage() {
         <DecisionHistoryTable
           fetchLive={true}
           onRefresh={loadStats}
+          onOpenCase={(r) => {
+            const targetId = r.queueCode || r.referenceId || r.transactionId || r.id;
+            if (targetId) {
+              navigate(`/analyst/cases/${encodeURIComponent(targetId)}`);
+            }
+          }}
         />
 
       </div>

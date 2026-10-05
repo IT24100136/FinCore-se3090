@@ -400,8 +400,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     final bool isHeld =
         status.toLowerCase() == 'held' || status.toLowerCase() == 'pending';
     final int waitMinutes = (tx['estimatedWaitMinutes'] as num?)?.toInt() ?? 10;
-    final DateTime timestamp = DateTime.tryParse(tx['timestamp'] ?? '') ??
-        DateTime.now();
+    final DateTime timestamp = (DateTime.tryParse(tx['timestamp'] ?? '') ??
+        DateTime.now()).toLocal();
 
     Color statusColor;
     switch (status.toLowerCase()) {
@@ -451,6 +451,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 riskScore: (tx['riskScore'] as num?)?.toInt(),
                 senderAccountNumber: tx['senderAccountNumber'] ?? 'ACC-00000001',
                 transactionId: tx['transactionId'] ?? tx['id'],
+                timestamp: timestamp,
               ),
             ),
           );
@@ -578,11 +579,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
 
   String _formatDate(DateTime dt) {
+    final local = dt.toLocal();
     final now = DateTime.now();
-    if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-      return 'Today ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    final hour12 = local.hour == 0 ? 12 : (local.hour > 12 ? local.hour - 12 : local.hour);
+    final ampm = local.hour >= 12 ? 'PM' : 'AM';
+    final timeStr = '$hour12:${local.minute.toString().padLeft(2, '0')} $ampm';
+
+    if (local.year == now.year && local.month == now.month && local.day == now.day) {
+      return 'Today, $timeStr';
     }
-    return '${dt.day}/${dt.month}/${dt.year}';
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}, $timeStr';
   }
 }
 

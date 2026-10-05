@@ -129,10 +129,51 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Case Detail Routes (Analyst + Admin permitted) */}
             <Route
               path="/analyst/cases/:id"
               element={
                 <ProtectedRoute allowedRoles={['Analyst', 'Admin']}>
+                  <CaseDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analyst/cases"
+              element={
+                <ProtectedRoute allowedRoles={['Analyst', 'Admin']}>
+                  <CaseDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/cases/:id"
+              element={
+                <ProtectedRoute allowedRoles={['Analyst', 'Admin']}>
+                  <CaseDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/cases"
+              element={
+                <ProtectedRoute allowedRoles={['Analyst', 'Admin']}>
+                  <CaseDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/cases/:id"
+              element={
+                <ProtectedRoute allowedRoles={['Admin']}>
+                  <CaseDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/cases"
+              element={
+                <ProtectedRoute allowedRoles={['Admin']}>
                   <CaseDetailPage />
                 </ProtectedRoute>
               }

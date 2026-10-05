@@ -23,7 +23,10 @@ class TransactionStatusScreen extends StatefulWidget {
     this.message,
     this.senderAccountNumber,
     this.transactionId,
+    this.timestamp,
   });
+
+  final DateTime? timestamp;
 
   @override
   State<TransactionStatusScreen> createState() => _TransactionStatusScreenState();
@@ -110,11 +113,13 @@ class _TransactionStatusScreenState extends State<TransactionStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final dt = (widget.timestamp ?? DateTime.now()).toLocal();
+    final hour12 = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     final dateStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
     final timeStr =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+        '$hour12:${dt.minute.toString().padLeft(2, '0')} $ampm';
 
     return Scaffold(
       backgroundColor: Colors.white,

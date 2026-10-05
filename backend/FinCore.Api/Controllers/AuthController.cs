@@ -116,7 +116,11 @@ namespace FinCore.Api.Controllers
                 PhoneNumber = request.PhoneNumber,
                 PinHash = !string.IsNullOrWhiteSpace(request.Pin) ? BCrypt.Net.BCrypt.HashPassword(request.Pin) : null,
                 BiometricEnabled = request.BiometricEnabled,
-                DateOfBirth = request.DateOfBirth,
+                DateOfBirth = request.DateOfBirth.HasValue
+                    ? (request.DateOfBirth.Value.Kind == DateTimeKind.Utc
+                        ? request.DateOfBirth.Value
+                        : DateTime.SpecifyKind(request.DateOfBirth.Value, DateTimeKind.Utc))
+                    : null,
                 Address = request.Address,
                 City = request.City,
                 PostalCode = request.PostalCode,

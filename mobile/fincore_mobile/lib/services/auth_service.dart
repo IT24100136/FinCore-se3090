@@ -110,7 +110,9 @@ class AuthService {
         'phoneNumber': phoneNumber,
         'pin': pin,
         'biometricEnabled': biometricEnabled,
-        'dateOfBirth': dateOfBirth?.toIso8601String(),
+        'dateOfBirth': dateOfBirth != null
+            ? DateTime.utc(dateOfBirth.year, dateOfBirth.month, dateOfBirth.day).toIso8601String()
+            : null,
         'address': address,
         'city': city,
         'postalCode': postalCode,
@@ -127,14 +129,28 @@ class AuthService {
       }),
     );
 
-    final data = jsonDecode(response.body);
+    Map<String, dynamic> data = {};
+    try {
+      if (response.body.isNotEmpty) {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {
+      // Body was not JSON (e.g. server error page)
+    }
+
     if (response.statusCode == 200) {
       if (data['token'] != null) {
         await saveToken(data['token']);
       }
       return {'success': true, 'data': data};
     } else {
-      return {'success': false, 'message': data['message'] ?? 'Registration failed'};
+      return {
+        'success': false,
+        'message': data['message'] ??
+            (response.statusCode >= 500
+                ? 'Server error (${response.statusCode})'
+                : 'Registration failed (${response.statusCode})'),
+      };
     }
   }
 

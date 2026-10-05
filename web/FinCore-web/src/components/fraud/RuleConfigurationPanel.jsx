@@ -188,6 +188,7 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
 
       handleReset();
       await loadRules();
+      loadAuditLogs();
       if (onRuleChanged) onRuleChanged();
     } catch (err) {
       setFeedback({ type: 'error', message: 'Failed to save rule: ' + (err.message || 'Server error') });
@@ -199,12 +200,13 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
   const handleToggleStatus = async (rule) => {
     try {
       const newStatus = !rule.isActive;
-      await fraudService.updateRule(rule.id, { isActive: newStatus });
+      await fraudService.updateRule(rule.id, { isActive: newStatus, ruleName: rule.ruleName, thresholdValue: rule.thresholdValue });
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, isActive: newStatus } : r));
       setFeedback({
         type: 'success',
         message: `Rule "${rule.ruleName}" is now ${newStatus ? 'ACTIVE' : 'DISABLED'}.`
       });
+      loadAuditLogs();
       if (onRuleChanged) onRuleChanged();
     } catch (err) {
       setFeedback({ type: 'error', message: 'Failed to toggle status: ' + err.message });
@@ -235,6 +237,7 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
       setRules(prev => prev.filter(r => r.id !== rule.id));
       setFeedback({ type: 'success', message: `Rule "${rule.ruleName}" was successfully removed.` });
       if (editingRuleId === rule.id) handleReset();
+      loadAuditLogs();
       if (onRuleChanged) onRuleChanged();
     } catch (err) {
       setFeedback({ type: 'error', message: 'Failed to delete rule: ' + err.message });

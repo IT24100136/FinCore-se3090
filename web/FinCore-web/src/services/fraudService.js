@@ -304,13 +304,28 @@ export const fraudService = {
    * Fetch all active / configured fraud rules with localStorage persistence
    */
   getRules: async () => {
-    // Read from localStorage to preserve user added/deleted/updated rules across refreshes
     const localRules = getLocalRules();
     try {
       const response = await axios.get(`${FRAUD_API_URL}/rules`);
       if (Array.isArray(response.data) && response.data.length > 0) {
-        // Backend is online - reconcile any backend rules if local store only had defaults
-        return localRules;
+        const merged = response.data.map(br => {
+          const match = localRules.find(lr => lr.id === br.id || lr.ruleName === br.ruleName);
+          return {
+            id: br.id,
+            ruleId: `RUL-${String(br.id).padStart(3, '0')}`,
+            ruleName: br.ruleName,
+            description: match?.description || `Rule threshold evaluating ${br.ruleName}`,
+            signalCategory: match?.signalCategory || (br.ruleName.includes('Geo') ? 'Geolocation Anomaly' : br.ruleName.includes('Device') ? 'Device Fingerprint' : br.ruleName.includes('Velocity') ? 'Velocity / Frequency' : 'Transaction Amount'),
+            thresholdValue: Number(br.thresholdValue),
+            thresholdUnit: match?.thresholdUnit || (br.ruleName.includes('Geo') ? 'km' : br.ruleName.includes('Device') ? 'match' : 'Rs.'),
+            scoreWeight: match?.scoreWeight || 25,
+            isActive: br.isActive,
+            lastUpdated: br.lastUpdated || new Date().toISOString(),
+            triggerCount: match?.triggerCount || 0
+          };
+        });
+        saveLocalRules(merged);
+        return merged;
       }
     } catch (err) {
       console.info('Fraud API /rules unavailable, using persistent localStorage rules.', err.message);

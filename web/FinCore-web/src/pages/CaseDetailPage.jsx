@@ -1,30 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ShieldAlert,
   FileCheck2,
-  ArrowUpRight
+  ArrowUpRight,
+  Layers
 } from 'lucide-react';
 import { reviewService } from '../services/reviewService';
 import { useAuth } from '../context/AuthContext';
 
 export default function CaseDetailPage() {
-  const { id } = useParams();
+  const { id: paramId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  
+  const id = paramId || searchParams.get('caseId') || searchParams.get('id') || searchParams.get('queueId') || searchParams.get('txId');
   const [caseData, setCaseData] = useState(null);
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchCase = async () => {
-    if (!id) return;
+  const fetchCase = async (lookupId) => {
+    const targetId = lookupId || id;
+    if (!targetId) {
+      // If no ID is provided, try loading the latest case from the queue or show prompt
+      try {
+        setIsLoading(true);
+        const data = await reviewService.getCaseById('latest');
+        if (data && (data.item || data.id || data.queueCode)) {
+          const item = data.item || data;
+          setCaseData({
+            ...item,
+            assignedAnalystName: data.assignedAnalystName || item.assignedAnalystName,
+            assignedAnalystEmpId: data.assignedAnalystEmpId || item.assignedAnalystEmpId,
+            escalatedByName: data.escalatedByName || item.escalatedByName,
+            escalatedByEmpId: data.escalatedByEmpId || item.escalatedByEmpId,
+            escalationReason: data.escalationReason || item.escalationReason
+          });
+          setHistory(Array.isArray(data.history) ? data.history : []);
+          setIsLoading(false);
+          return;
+        }
+      } catch (e) {
+        // Fall through to empty state
+      }
+      setIsLoading(false);
+      setError('No case identifier specified. Please select a case from the Review Queue or Audit Trail.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const data = await reviewService.getCaseById(id);
-      setCaseData(data.item || data);
+      const data = await reviewService.getCaseById(targetId);
+      const item = data.item || data;
+      setCaseData({
+        ...item,
+        assignedAnalystName: data.assignedAnalystName || item.assignedAnalystName,
+        assignedAnalystEmpId: data.assignedAnalystEmpId || item.assignedAnalystEmpId,
+        escalatedByName: data.escalatedByName || item.escalatedByName,
+        escalatedByEmpId: data.escalatedByEmpId || item.escalatedByEmpId,
+        escalationReason: data.escalationReason || item.escalationReason
+      });
       setHistory(Array.isArray(data.history) ? data.history : []);
     } catch (err) {
       console.error('Case detail fetch error:', err);
@@ -36,7 +75,7 @@ export default function CaseDetailPage() {
 
   useEffect(() => {
     fetchCase();
-  }, [id]);
+  }, [paramId, searchParams]);
 
   if (isLoading) {
     return (
@@ -51,19 +90,27 @@ export default function CaseDetailPage() {
 
   if (error || !caseData) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 p-8 flex items-center justify-center font-sans">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-md w-full text-center space-y-4">
-          <ShieldAlert className="w-12 h-12 text-red-600 mx-auto" />
-          <h2 className="text-lg font-bold text-gray-900">Case Not Found</h2>
+          <ShieldAlert className="w-12 h-12 text-amber-600 mx-auto" />
+          <h2 className="text-lg font-bold text-gray-900">Case Dossier Notice</h2>
           <p className="text-xs text-gray-500">
-            {error || `Unable to load case '${id}'.`}
+            {error || `Unable to load case record.`}
           </p>
-          <button
-            onClick={() => navigate('/analyst/history')}
-            className="bg-blue-600 text-white hover:bg-blue-700 font-medium px-4 py-2 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
-          >
-            Return to Audit History
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
+            <button
+              onClick={() => navigate('/analyst/review-queue')}
+              className="w-full sm:w-auto bg-blue-600 text-white hover:bg-blue-700 font-medium px-4 py-2 text-xs rounded-md shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Layers className="w-3.5 h-3.5" /> Open Review Queue
+            </button>
+            <button
+              onClick={() => navigate('/analyst/history')}
+              className="w-full sm:w-auto bg-white border border-gray-200 text-gray-700 hover:bg-slate-50 font-medium px-4 py-2 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
+            >
+              Audit History
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -136,10 +183,10 @@ export default function CaseDetailPage() {
               TRANSACTION AMOUNT
             </div>
             <div className="text-2xl md:text-3xl font-extrabold text-gray-900">
-              Rs. {Number(caseData.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              Rs. {Number(caseData.amount || caseData.transactionAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
             <div className="text-xs text-gray-400 mt-1 font-medium">
-              Created: {new Date(caseData.createdAt).toLocaleString()}
+              Created: {caseData.createdAt ? new Date(caseData.createdAt).toLocaleString() : 'N/A'}
             </div>
           </div>
         </div>

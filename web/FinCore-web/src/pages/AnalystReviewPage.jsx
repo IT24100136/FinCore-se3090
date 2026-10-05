@@ -1010,6 +1010,23 @@ export default function AnalystReviewPage() {
                         </div>
                     )}
 
+                    {/* VIEW: CASE DETAIL EMPTY STATE */}
+                    {activeTab === 'case-detail' && !selectedCase && (
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center max-w-lg mx-auto my-8 space-y-4">
+                            <ShieldAlert className="w-12 h-12 text-blue-600 mx-auto" />
+                            <h2 className="text-lg font-bold text-gray-900">No Case Selected for Inspection</h2>
+                            <p className="text-xs text-gray-500">
+                                Select an active case from the Review Queue or Audit History to inspect forensics, analyze device telemetry, and make approval decisions.
+                            </p>
+                            <button
+                                onClick={() => setActiveTab('review-queue')}
+                                className="bg-blue-600 text-white hover:bg-blue-700 font-medium px-4 py-2 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
+                            >
+                                Back to Review Queue
+                            </button>
+                        </div>
+                    )}
+
                     {/* VIEW: CASE DETAIL */}
                     {activeTab === 'case-detail' && selectedCase && (
                         <div className="space-y-6">

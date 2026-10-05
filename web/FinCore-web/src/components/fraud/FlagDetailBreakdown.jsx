@@ -50,7 +50,7 @@ export default function FlagDetailBreakdown({ flag, onBack, onNavigateToCase }) 
     if (onNavigateToCase) {
       onNavigateToCase(targetCaseId, flag);
     } else {
-      navigate(`/analyst/review-queue?tab=case-detail&caseId=${encodeURIComponent(targetCaseId)}`);
+      navigate(`/analyst/cases/${encodeURIComponent(targetCaseId)}`);
     }
   };
 

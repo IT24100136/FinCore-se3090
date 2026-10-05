@@ -9,6 +9,8 @@ using Microsoft.SemanticKernel;
 
 using FinCore.Api.Hubs;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Configure the CORS policy to allow your Vite frontend (and Flutter Web)

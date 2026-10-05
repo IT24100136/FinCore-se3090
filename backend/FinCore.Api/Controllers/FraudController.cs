@@ -177,17 +177,22 @@ namespace FinCore.Api.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdateRule(int id, [FromBody] RuleThreshold updated)
         {
-            var existing = await _context.RuleThresholds.FindAsync(id);
+            var existing = await _context.RuleThresholds.FindAsync(id)
+                ?? await _context.RuleThresholds.FirstOrDefaultAsync(r => !string.IsNullOrEmpty(updated.RuleName) && r.RuleName.ToLower() == updated.RuleName.ToLower());
+
             if (existing == null)
             {
                 return NotFound(new { message = $"Rule with ID {id} not found." });
             }
 
             var prevVal = JsonSerializer.Serialize(new { existing.RuleName, existing.ThresholdValue, existing.IsActive });
-            var isToggleOnly = existing.RuleName == updated.RuleName && existing.ThresholdValue == updated.ThresholdValue && existing.IsActive != updated.IsActive;
+            var isToggleOnly = (string.IsNullOrEmpty(updated.RuleName) || existing.RuleName == updated.RuleName) && existing.IsActive != updated.IsActive;
 
-            existing.RuleName = updated.RuleName ?? existing.RuleName;
-            existing.ThresholdValue = updated.ThresholdValue;
+            existing.RuleName = !string.IsNullOrWhiteSpace(updated.RuleName) ? updated.RuleName : existing.RuleName;
+            if (updated.ThresholdValue > 0 || (updated.ThresholdValue == 0 && !string.IsNullOrWhiteSpace(updated.RuleName)))
+            {
+                existing.ThresholdValue = updated.ThresholdValue;
+            }
             existing.IsActive = updated.IsActive;
             existing.LastUpdated = DateTime.UtcNow;
 
@@ -254,7 +259,7 @@ namespace FinCore.Api.Controllers
         public async Task<IActionResult> GetRules()
         {
             var rules = await _context.RuleThresholds
-                .Where(r => r.IsActive)
+                .OrderBy(r => r.Id)
                 .ToListAsync();
 
             return Ok(rules);

@@ -374,8 +374,12 @@ function DecisionHistoryTableInner({
                       </td>
 
                       {/* 4. Reference & Amount */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1 font-mono font-bold text-xs text-blue-600">
+                      <td 
+                        className={`px-6 py-4 whitespace-nowrap ${onOpenCase ? 'cursor-pointer hover:bg-blue-50/50' : ''}`}
+                        onClick={() => onOpenCase && onOpenCase(r)}
+                        title={onOpenCase ? 'Click to inspect Case Dossier' : ''}
+                      >
+                        <div className="flex items-center gap-1 font-mono font-bold text-xs text-blue-600 hover:text-blue-800">
                           <span>{reference}</span>
                           {onOpenCase && <ExternalLink className="w-3 h-3 opacity-70" />}
                         </div>
