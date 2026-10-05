@@ -69,34 +69,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       if (_isSignInMode) {
-        final result = await AuthService.login(email: email, password: password);
-        if (result['success']) {
-          // Check for unverified device
-          if (result['deviceVerification'] != null &&
-              result['deviceVerification']['status'] == 'Unverified') {
-            final rawSessionId = result['deviceVerification']['sessionId'];
-            final sessionId = rawSessionId is int
-                ? rawSessionId
-                : int.tryParse(rawSessionId.toString());
-            if (sessionId != null && mounted) {
-              _showUnverifiedDeviceDialog(sessionId);
-            }
-          } else if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
-            );
-          }
+        // Trigger 2-Step verification OTP via Brevo email
+        final result = await AuthService.sendOtp(email, password);
+        if (result['success'] == true) {
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OtpVerificationScreen(email: email),
+            ),
+          );
         } else {
-          setState(() => _errorMessage = result['message'] ?? 'Login failed.');
+          setState(() => _errorMessage = result['message'] ?? 'Failed to send verification code.');
         }
       } else {
         final result = await AuthService.register(email: email, password: password);
-        if (result['success']) {
-          setState(() {
-            _successMessage = 'Registered! You can now sign in.';
-            _isSignInMode = true;
-          });
+        if (result['success'] == true) {
+          // Trigger OTP for first login verification
+          await AuthService.sendOtp(email);
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OtpVerificationScreen(email: email),
+            ),
+          );
         } else {
           setState(() => _errorMessage = result['message'] ?? 'Registration failed.');
         }
@@ -139,10 +136,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => OtpVerificationScreen(
-                      identifier: _emailController.text.trim().isNotEmpty
+                      email: _emailController.text.trim().isNotEmpty
                           ? _emailController.text.trim()
                           : 'kasun@fincore.com',
-                      sessionId: sessionId,
                       onVerified: () {
                         Navigator.pushReplacement(
                           context,
@@ -241,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => OtpVerificationScreen(
-                                      identifier: _emailController.text.trim().isNotEmpty
+                                      email: _emailController.text.trim().isNotEmpty
                                           ? _emailController.text.trim()
                                           : 'kasun@fincore.com',
                                       onVerified: () {
@@ -530,11 +526,20 @@ class _LoginScreenState extends State<LoginScreen> {
         // Fallback: If no token yet, attempt sign in with current input credentials
         if (_emailController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
           _handleAuth();
-        } else {
-          // Fill test credentials or prompt
+        } else if (!BiometricService.isPlatformSupported) {
+          // Development convenience for Web / Desktop testing
           _emailController.text = 'kasun@fincore.com';
           _passwordController.text = 'Password123!';
           _handleAuth();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No saved session found. Please log in with your credentials first to enable biometric sign-in.',
+              ),
+              backgroundColor: Color(0xFF1E293B),
+            ),
+          );
         }
       }
     }

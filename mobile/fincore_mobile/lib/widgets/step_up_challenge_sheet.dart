@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/wallet_service.dart';
 
@@ -10,6 +12,7 @@ class StepUpChallengeSheet extends StatefulWidget {
   final String recipient;
   final String senderAccountNumber;
   final int riskScore;
+  final String? maskedEmail;
 
   const StepUpChallengeSheet({
     super.key,
@@ -19,6 +22,7 @@ class StepUpChallengeSheet extends StatefulWidget {
     required this.recipient,
     required this.senderAccountNumber,
     required this.riskScore,
+    this.maskedEmail,
   });
 
   static Future<Map<String, dynamic>?> show(
@@ -29,6 +33,7 @@ class StepUpChallengeSheet extends StatefulWidget {
     required String recipient,
     required String senderAccountNumber,
     required int riskScore,
+    String? maskedEmail,
   }) {
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -41,6 +46,7 @@ class StepUpChallengeSheet extends StatefulWidget {
         recipient: recipient,
         senderAccountNumber: senderAccountNumber,
         riskScore: riskScore,
+        maskedEmail: maskedEmail,
       ),
     );
   }
@@ -55,11 +61,94 @@ class _StepUpChallengeSheetState extends State<StepUpChallengeSheet> {
   bool _isLoading = false;
   String? _errorMessage;
   bool _showOtpField = false;
+  String? _maskedEmail;
+  bool _isResending = false;
+  String? _resendSuccessMessage;
+  int _resendCooldown = 0;
+  Timer? _cooldownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _maskedEmail = widget.maskedEmail;
+    if (_maskedEmail == null || _maskedEmail!.isEmpty) {
+      _loadUserEmail();
+    }
+  }
+
+  Future<void> _loadUserEmail() async {
+    try {
+      final user = await AuthService.getCurrentUser();
+      final email = user['email'] as String?;
+      if (email != null && email.isNotEmpty && mounted) {
+        setState(() {
+          _maskedEmail = _maskEmail(email);
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _maskEmail(String email) {
+    final parts = email.split('@');
+    if (parts.length != 2) return email;
+    final name = parts[0];
+    final domain = parts[1];
+    if (name.length <= 2) return '${name[0]}*@$domain';
+    return '${name[0]}${'*' * (name.length > 5 ? 4 : name.length - 2)}${name[name.length - 1]}@$domain';
+  }
 
   @override
   void dispose() {
     _otpController.dispose();
+    _cooldownTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _handleResendOtp() async {
+    if (_isResending || _resendCooldown > 0) return;
+
+    setState(() {
+      _isResending = true;
+      _errorMessage = null;
+      _resendSuccessMessage = null;
+    });
+
+    try {
+      final res = await _walletService.resendStepUpOtp(widget.transactionId);
+      if (mounted) {
+        setState(() {
+          _isResending = false;
+          if (res['maskedEmail'] != null) {
+            _maskedEmail = res['maskedEmail'].toString();
+          }
+          _resendSuccessMessage = res['message'] ?? 'New verification code sent to your email!';
+          _resendCooldown = 30;
+        });
+
+        _cooldownTimer?.cancel();
+        _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
+          setState(() {
+            if (_resendCooldown > 1) {
+              _resendCooldown--;
+            } else {
+              _resendCooldown = 0;
+              timer.cancel();
+            }
+          });
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isResending = false;
+          _errorMessage = 'Failed to resend code: ${e.toString().replaceAll("Exception: ", "")}';
+        });
+      }
+    }
   }
 
   String _formatAmount(double v) {
@@ -359,7 +448,7 @@ class _StepUpChallengeSheetState extends State<StepUpChallengeSheet> {
 
                 const SizedBox(height: 14),
 
-                // Secondary Option: 6-Digit OTP Accordion / Toggle
+                // Secondary Option: 6-Digit Email OTP Accordion / Toggle
                 if (!_showOtpField) ...[
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -367,9 +456,9 @@ class _StepUpChallengeSheetState extends State<StepUpChallengeSheet> {
                       side: const BorderSide(color: Color(0xFFCBD5E1)),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(Icons.pin_outlined, size: 18, color: Color(0xFF1E293B)),
+                    icon: const Icon(Icons.mark_email_read_outlined, size: 18, color: Color(0xFF1E293B)),
                     label: const Text(
-                      'Or Verify with 6-Digit OTP',
+                      'Or Verify with 6-Digit Email OTP',
                       style: TextStyle(fontSize: 14, color: Color(0xFF1E293B), fontWeight: FontWeight.w600),
                     ),
                     onPressed: () => setState(() => _showOtpField = true),
@@ -385,11 +474,60 @@ class _StepUpChallengeSheetState extends State<StepUpChallengeSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Email OTP Sent Indicator
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.mark_email_read_outlined, size: 16, color: Color(0xFF16A34A)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _maskedEmail != null && _maskedEmail!.isNotEmpty
+                                      ? 'Verification code dispatched to $_maskedEmail'
+                                      : 'Verification code sent to your registered email.',
+                                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF15803D), fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        if (_resendSuccessMessage != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFBFDBFE)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle_outline, size: 15, color: Color(0xFF2563EB)),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    _resendSuccessMessage!,
+                                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF1D4ED8), fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'Enter 6-Digit Verification Code',
+                              'Enter 6-Digit Email Code',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
                             ),
                             GestureDetector(
@@ -434,6 +572,47 @@ class _StepUpChallengeSheetState extends State<StepUpChallengeSheet> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 10),
+
+                        // Resend Email OTP Link
+                        Center(
+                          child: InkWell(
+                            onTap: (_isResending || _resendCooldown > 0) ? null : _handleResendOtp,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_isResending)
+                                    const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2563EB)),
+                                    )
+                                  else
+                                    Icon(
+                                      Icons.refresh_rounded,
+                                      size: 14,
+                                      color: _resendCooldown > 0 ? const Color(0xFF94A3B8) : const Color(0xFF2563EB),
+                                    ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    _resendCooldown > 0
+                                        ? 'Resend Code via Email (${_resendCooldown}s)'
+                                        : 'Resend Code via Email',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _resendCooldown > 0 ? const Color(0xFF94A3B8) : const Color(0xFF2563EB),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
                         const SizedBox(height: 10),
                         SizedBox(
                           width: double.infinity,

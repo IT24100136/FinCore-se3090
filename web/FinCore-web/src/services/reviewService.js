@@ -32,6 +32,14 @@ export const reviewService = {
     },
 
     getAvailableAnalysts: async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/analysts`);
+            if (Array.isArray(response.data) && response.data.length > 0) {
+                return response.data;
+            }
+        } catch (e) {
+            // Fallback to staff endpoint
+        }
         const response = await axios.get('/api/users/staff');
         return response.data;
     },

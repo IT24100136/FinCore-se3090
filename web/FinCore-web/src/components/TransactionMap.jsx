@@ -11,15 +11,17 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-export default function TransactionMap({ lat = 6.9271, lng = 79.8612, locationName = "Colombo, Sri Lanka" }) {
+export default function TransactionMap({ lat, lng, latitude, longitude, locationName = "Colombo, Sri Lanka" }) {
+    const finalLat = Number(latitude ?? lat ?? 6.9271);
+    const finalLng = Number(longitude ?? lng ?? 79.8612);
     return (
         <div style={{ height: '240px', width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
-            <MapContainer key={`${lat}-${lng}`} center={[lat, lng]} zoom={13} style={{ height: '100%', width: '100%' }}>
+            <MapContainer key={`${finalLat}-${finalLng}`} center={[finalLat, finalLng]} zoom={13} style={{ height: '100%', width: '100%' }}>
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                <Marker position={[lat, lng]}>
+                <Marker position={[finalLat, finalLng]}>
                     <Popup>
                         <strong>Originating Location</strong><br />
                         {locationName}

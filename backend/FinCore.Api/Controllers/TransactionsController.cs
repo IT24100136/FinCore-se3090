@@ -18,15 +18,32 @@ namespace FinCore.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IFraudService _fraudService;
         private readonly IHubContext<TransactionHub> _hubContext;
+        private readonly Services.NotificationService.IEmailService _emailService;
+
+        public record StepUpOtpEntry(string Code, DateTime ExpiresAt, string Email);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, StepUpOtpEntry> _stepUpOtpStore = new();
+
+        private static string MaskEmail(string? email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return "registered email";
+            var parts = email.Split('@');
+            if (parts.Length != 2) return email;
+            var name = parts[0];
+            var domain = parts[1];
+            if (name.Length <= 2) return $"{name[0]}*@{domain}";
+            return $"{name[0]}{new string('*', Math.Min(4, name.Length - 2))}{name[^1]}@{domain}";
+        }
 
         public TransactionsController(
             ApplicationDbContext context,
             IFraudService fraudService,
-            IHubContext<TransactionHub> hubContext)
+            IHubContext<TransactionHub> hubContext,
+            Services.NotificationService.IEmailService emailService)
         {
             _context = context;
             _fraudService = fraudService;
             _hubContext = hubContext;
+            _emailService = emailService;
         }
 
         private (Guid? userGuid, int deterministicIntId) ResolveUserIdentity()
@@ -197,6 +214,31 @@ namespace FinCore.Api.Controllers
                     Timestamp = DateTime.UtcNow
                 });
 
+                // Trigger live transaction alert via Brevo email
+                var senderEmail = User.FindFirstValue(ClaimTypes.Email);
+                if (!string.IsNullOrWhiteSpace(senderEmail))
+                {
+                    var recipientDisplay = receiverUser?.Name ?? request.RecipientIdentifier;
+                    var successMessage = $"FinCore: Your transfer of LKR {transaction.Amount:N2} to {recipientDisplay} was successful.";
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _emailService.SendEmailAsync(
+                                senderEmail,
+                                userName,
+                                "FinCore Transaction Successful",
+                                $"<p>{successMessage}</p>",
+                                successMessage
+                            );
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Brevo Notification Warning] Transfer success alert error: {ex.Message}");
+                        }
+                    });
+                }
+
                 if (receiverUser != null)
                 {
                     var receiverIntId = DbInitializer.GetDeterministicUserId(receiverUser.Id);
@@ -236,6 +278,57 @@ namespace FinCore.Api.Controllers
 
             bool requiresStepUp = fraudFlag.RiskScore >= 50 && fraudFlag.RiskScore < 70 && !isStatutoryDualApproval;
 
+            string? stepUpOtpCode = null;
+            string? stepUpEmail = null;
+            if (requiresStepUp)
+            {
+                stepUpOtpCode = Random.Shared.Next(100000, 999999).ToString();
+                stepUpEmail = User.FindFirstValue(ClaimTypes.Email);
+                if (string.IsNullOrWhiteSpace(stepUpEmail) && senderWallet != null)
+                {
+                    var senderUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == senderWallet.UserGuid || (u.Email != null && senderWallet.UserId > 0));
+                    stepUpEmail = senderUser?.Email;
+                }
+                stepUpEmail ??= "user@fincore.internal";
+
+                var entry = new StepUpOtpEntry(stepUpOtpCode, DateTime.UtcNow.AddMinutes(10), stepUpEmail);
+                _stepUpOtpStore[transaction.Id.ToString()] = entry;
+                _stepUpOtpStore[transaction.ReferenceId] = entry;
+
+                Console.WriteLine($"[FinCore Step-Up OTP] Generated Step-Up OTP for Tx {transaction.ReferenceId} ({stepUpEmail}): {stepUpOtpCode} (Valid 10 mins)");
+
+                // Dispatch Step-Up OTP Email via Brevo
+                if (!string.IsNullOrWhiteSpace(stepUpEmail))
+                {
+                    var targetEmail = stepUpEmail;
+                    var targetName = userName;
+                    var txAmount = transaction.Amount;
+                    var recipientAcc = request.RecipientIdentifier;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var emailRes = await _emailService.SendStepUpOtpEmailAsync(
+                                targetEmail,
+                                targetName,
+                                stepUpOtpCode,
+                                txAmount,
+                                recipientAcc,
+                                expirationMinutes: 10
+                            );
+                            if (!emailRes.Success)
+                            {
+                                Console.WriteLine($"[Brevo Step-Up OTP Warning] Delivery warning: {emailRes.ErrorMessage}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Brevo Step-Up OTP Error] Failed to send step-up OTP email: {ex.Message}");
+                        }
+                    });
+                }
+            }
+
             return Ok(new
             {
                 message = transaction.Status == "Completed"
@@ -248,14 +341,18 @@ namespace FinCore.Api.Controllers
                 transactionId = transaction.Id,
                 id = transaction.Id,
                 referenceId = transaction.ReferenceId,
-                senderAccountNumber = $"ACC-{senderWallet.Id:D8}",
+                senderAccountNumber = senderWallet != null ? $"ACC-{senderWallet.Id:D8}" : null,
                 status = transaction.Status,
                 amount = transaction.Amount,
                 recipient = request.RecipientIdentifier,
                 riskScore = fraudFlag.RiskScore,
                 isHeld = transaction.Status != "Completed",
                 requiresStepUp,
-                isFraudFlagged = fraudFlag.RiskScore >= 40
+                isFraudFlagged = fraudFlag.RiskScore >= 40,
+                stepUpOtpSent = requiresStepUp,
+                maskedEmail = requiresStepUp ? MaskEmail(stepUpEmail) : null,
+                debugOtp = requiresStepUp ? stepUpOtpCode : null,
+                fallbackOtp = "123456"
             });
         }
 
@@ -483,6 +580,82 @@ namespace FinCore.Api.Controllers
             });
         }
 
+        // ── POST /api/transactions/{id}/step-up-otp ─────────────────────────
+        // Dispatches/Resends a live 6-digit OTP email to user's registered address
+        [HttpPost("{id}/step-up-otp")]
+        public async Task<IActionResult> ResendStepUpOtp(string id)
+        {
+            Transaction? transaction = null;
+            if (int.TryParse(id, out int dbId))
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.Id == dbId || t.ReferenceId == id);
+            }
+            else
+            {
+                transaction = await _context.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == id);
+            }
+
+            if (transaction == null)
+            {
+                return NotFound(new { message = $"Transaction '{id}' was not found." });
+            }
+
+            if (transaction.Status == "Completed")
+            {
+                return BadRequest(new { message = "Transaction is already completed." });
+            }
+
+            if (transaction.Status != "Held" && transaction.Status != "Pending" && transaction.Status != "PendingSecondApproval")
+            {
+                return BadRequest(new { message = $"Cannot send verification OTP for transaction with status '{transaction.Status}'." });
+            }
+
+            var senderWallet = await _context.Wallets.FirstOrDefaultAsync(w => w.Id == transaction.SenderWalletId);
+            var senderUser = senderWallet != null
+                ? await _context.Users.FirstOrDefaultAsync(u => u.Id == senderWallet.UserGuid || (u.Email != null && senderWallet.UserId > 0))
+                : null;
+
+            var senderEmail = senderUser?.Email ?? User.FindFirstValue(ClaimTypes.Email) ?? "user@fincore.internal";
+            var userName = senderUser?.Name ?? User.FindFirstValue(ClaimTypes.Name) ?? "Valued Customer";
+
+            var otpCode = Random.Shared.Next(100000, 999999).ToString();
+            var entry = new StepUpOtpEntry(otpCode, DateTime.UtcNow.AddMinutes(10), senderEmail);
+            _stepUpOtpStore[transaction.Id.ToString()] = entry;
+            _stepUpOtpStore[transaction.ReferenceId] = entry;
+
+            Console.WriteLine($"[FinCore Step-Up OTP Gateway] Resending Step-Up OTP for Tx {transaction.ReferenceId} ({senderEmail}): {otpCode}");
+
+            try
+            {
+                var emailRes = await _emailService.SendStepUpOtpEmailAsync(
+                    senderEmail,
+                    userName,
+                    otpCode,
+                    transaction.Amount,
+                    null,
+                    expirationMinutes: 10
+                );
+                if (!emailRes.Success)
+                {
+                    Console.WriteLine($"[Brevo Step-Up OTP Warning] Delivery warning: {emailRes.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Brevo Step-Up OTP Error] Failed to resend step-up OTP email: {ex.Message}");
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = $"Verification code dispatched to {MaskEmail(senderEmail)}.",
+                maskedEmail = MaskEmail(senderEmail),
+                expiresInSeconds = 600,
+                debugOtp = otpCode,
+                fallbackOtp = "123456"
+            });
+        }
+
         // ── POST /api/transactions/{id}/step-up-verify ───────────────────────
         // Step-up verification for medium risk (Score 50-69, status HELD / STEP_UP_CHALLENGE)
         [HttpPost("{id}/step-up-verify")]
@@ -523,10 +696,37 @@ namespace FinCore.Api.Controllers
 
             // Verify demo OTP or Biometric
             var verificationType = request?.VerificationType?.ToUpper() ?? "OTP";
-            var code = request?.Code ?? "123456";
-            if (verificationType == "OTP" && code != "123456")
+            var code = request?.Code?.Trim() ?? "123456";
+            if (verificationType == "OTP")
             {
-                return BadRequest(new { message = "Invalid OTP code. Enter 123456 in demo mode." });
+                bool isValid = code == "123456";
+
+                if (!isValid)
+                {
+                    // Check against dispatched step-up OTP
+                    if (_stepUpOtpStore.TryGetValue(transaction.Id.ToString(), out var otpEntry) ||
+                        _stepUpOtpStore.TryGetValue(transaction.ReferenceId, out otpEntry) ||
+                        _stepUpOtpStore.TryGetValue(id.ToString(), out otpEntry))
+                    {
+                        if (DateTime.UtcNow > otpEntry.ExpiresAt)
+                        {
+                            return BadRequest(new { message = "Verification code has expired. Please request a new code to your email." });
+                        }
+
+                        if (otpEntry.Code == code)
+                        {
+                            isValid = true;
+                            _stepUpOtpStore.TryRemove(transaction.Id.ToString(), out _);
+                            _stepUpOtpStore.TryRemove(transaction.ReferenceId, out _);
+                            _stepUpOtpStore.TryRemove(id.ToString(), out _);
+                        }
+                    }
+                }
+
+                if (!isValid)
+                {
+                    return BadRequest(new { message = "Invalid OTP verification code. Enter the code sent to your email or 123456." });
+                }
             }
 
             // 2. Transition status from HELD to COMPLETED

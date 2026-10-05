@@ -31,8 +31,10 @@ builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<IGeolocationService, GeolocationService>();
 builder.Services.AddScoped<IFraudService, FraudService>();
-builder.Services.AddScoped<INotificationService, MockNotificationService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<BrevoNotificationService>();
+builder.Services.AddScoped<INotificationService>(sp => sp.GetRequiredService<BrevoNotificationService>());
+builder.Services.AddScoped<IEmailService>(sp => sp.GetRequiredService<BrevoNotificationService>());
 builder.Services.AddScoped<TwilioNotificationService>();
 builder.Services.AddScoped<MockNotificationService>();
 builder.Services.AddTransient<Kernel>(sp =>

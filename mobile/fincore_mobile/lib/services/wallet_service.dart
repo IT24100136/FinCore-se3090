@@ -141,6 +141,20 @@ class WalletService {
     throw Exception(errData['message'] ?? 'Step-up verification failed (${res.statusCode})');
   }
 
+  // ── POST /transactions/{id}/step-up-otp ──────────────────────────────────
+  Future<Map<String, dynamic>> resendStepUpOtp(dynamic transactionId) async {
+    final token = await _getToken();
+    final res = await http.post(
+      Uri.parse('$baseUrl/transactions/$transactionId/step-up-otp'),
+      headers: _buildHeaders(token),
+    );
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    final errData = jsonDecode(res.body);
+    throw Exception(errData['message'] ?? 'Failed to resend verification OTP (${res.statusCode})');
+  }
+
   // ── GET /transactions/history (with filters + pagination) ─────────────────
   Future<Map<String, dynamic>> getHistory({
     String? status,

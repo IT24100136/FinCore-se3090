@@ -270,9 +270,14 @@ export default function AnalystReviewPage() {
 
     const handleOpenCase = (item) => {
         setSelectedCase(item);
-        setActiveTab('case-detail');
         setActionFeedback(null);
         loadHistory(item.transactionId);
+        const targetId = item.queueId || item.transactionId || item.id || item.queueCode;
+        if (targetId) {
+            navigate(`/analyst/cases/${encodeURIComponent(targetId)}`);
+        } else {
+            navigate('/analyst/cases');
+        }
     };
 
     const handleAssignToMe = async (item, e) => {
@@ -461,6 +466,7 @@ export default function AnalystReviewPage() {
         if (filterType === 'ASSIGNED_TO_ME') return item.isAssignedToMe || item.assignedAnalystId === currentAnalystId;
         if (filterType === 'CRITICAL') return item.priority === 'CRITICAL' || item.riskScore >= 75;
         if (filterType === 'DUAL') return item.requiresDualApproval;
+        if (filterType === 'ESCALATED') return item.status === 'Escalated';
         return true;
     });
 
@@ -595,13 +601,11 @@ export default function AnalystReviewPage() {
 
                     <button
                         onClick={() => {
-                            if (selectedCase) setActiveTab('case-detail');
-                            else if (queue.length > 0) {
-                                setSelectedCase(queue[0]);
-                                loadHistory(queue[0].transactionId);
-                                setActiveTab('case-detail');
+                            const targetId = selectedCase?.queueId || selectedCase?.transactionId || selectedCase?.id || (queue.length > 0 ? (queue[0].queueId || queue[0].transactionId || queue[0].id) : '');
+                            if (targetId) {
+                                navigate(`/analyst/cases/${encodeURIComponent(targetId)}`);
                             } else {
-                                setActiveTab('case-detail');
+                                navigate('/analyst/cases');
                             }
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
@@ -613,9 +617,9 @@ export default function AnalystReviewPage() {
                         <div className="flex items-center gap-2.5">
                             <FileText className="w-4 h-4" /> Case Detail
                         </div>
-                        {selectedCase && (
-                            <span className="text-[10px] font-bold text-slate-400">
-                                {selectedCase.queueId}
+                        {(selectedCase || queue.length > 0) && (
+                            <span className="text-[10px] font-bold text-slate-400 font-mono">
+                                {selectedCase?.queueId || queue[0]?.queueId}
                             </span>
                         )}
                     </button>
@@ -887,6 +891,17 @@ export default function AnalystReviewPage() {
                                         }`}
                                     >
                                         Dual Approval (&gt;Rs. 75k)
+                                    </button>
+
+                                    <button
+                                        onClick={() => setFilterType('ESCALATED')}
+                                        className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                            filterType === 'ESCALATED'
+                                                ? 'bg-amber-600 text-white shadow-sm'
+                                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        Escalated Cases ({queue.filter(q => q.status === 'Escalated').length})
                                     </button>
                                 </div>
 
@@ -1229,7 +1244,12 @@ export default function AnalystReviewPage() {
                             flag={selectedFraudFlag}
                             onBack={() => setActiveTab('fraud-flags')}
                             onNavigateToCase={(caseId) => {
-                                setActiveTab('case-detail');
+                                const target = caseId || selectedFraudFlag?.queueId || selectedFraudFlag?.transactionId || selectedFraudFlag?.id;
+                                if (target) {
+                                    navigate(`/analyst/cases/${encodeURIComponent(target)}`);
+                                } else {
+                                    navigate('/analyst/cases');
+                                }
                             }}
                         />
                     )}
@@ -1251,32 +1271,36 @@ export default function AnalystReviewPage() {
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-lg w-full overflow-hidden">
                         <div className="p-6 bg-slate-900 text-white border-b border-slate-800">
-                            <h3 className="text-lg font-bold">Escalate Case to Senior Analyst</h3>
-                            <p className="text-xs text-slate-400 mt-1">Select recipient analyst and state clear escalation rationale.</p>
+                            <h3 className="text-lg font-bold">Escalate Case</h3>
+                            <p className="text-xs text-slate-400 mt-1">Select analyst from database and state escalation reason.</p>
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Target Staff Member</label>
-                                <select
-                                    value={selectedTargetAnalystId}
-                                    onChange={(e) => setSelectedTargetAnalystId(e.target.value)}
-                                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                                >
-                                    {availableAnalysts.map(a => (
-                                        <option key={a.id} value={a.id}>
-                                            {a.name} ({a.role})
-                                        </option>
-                                    ))}
-                                </select>
+                                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Select Analyst:</label>
+                                {isLoadingAnalysts ? (
+                                    <div className="p-2 text-gray-400 text-xs">Loading staff from database...</div>
+                                ) : (
+                                    <select
+                                        value={selectedTargetAnalystId}
+                                        onChange={(e) => setSelectedTargetAnalystId(e.target.value)}
+                                        className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                                    >
+                                        {availableAnalysts.map(a => (
+                                            <option key={a.id} value={a.id}>
+                                                {a.name} ({a.role})
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Escalation Rationale</label>
+                                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Reason:</label>
                                 <textarea
                                     rows={3}
                                     value={escalationNotes}
                                     onChange={(e) => setEscalationNotes(e.target.value)}
                                     className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="State rationale..."
+                                    placeholder="Enter reason for escalation..."
                                 />
                             </div>
                         </div>
@@ -1290,9 +1314,9 @@ export default function AnalystReviewPage() {
                             <button
                                 onClick={handleConfirmEscalation}
                                 disabled={isSubmittingEscalation}
-                                className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 cursor-pointer"
+                                className="px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 cursor-pointer"
                             >
-                                {isSubmittingEscalation ? 'Submitting...' : 'Confirm Escalation'}
+                                {isSubmittingEscalation ? 'Escalating...' : 'Escalate'}
                             </button>
                         </div>
                     </div>
