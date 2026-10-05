@@ -27,16 +27,17 @@ export default function DeviceHistoryView({ onUpdateSessionStatus, searchQuery =
   const [copiedFingerprint, setCopiedFingerprint] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
 
-  // Fetch live device session history from ASP.NET Core API on mount
   const fetchDeviceSessions = async () => {
     setIsLoading(true);
-    setError('');
+    setError(null);
     try {
-      const response = await axios.get('http://localhost:5007/api/devices/1/sessions');
+      const token = localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('fincore_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get('/api/devices/sessions', { headers });
       setSessions(response.data || []);
     } catch (err) {
       console.error('Error fetching device sessions:', err);
-      setError(err.message || 'Failed to load device session data from backend API.');
+      setError(err.message || 'Failed to load device session telemetry from backend API.');
     } finally {
       setIsLoading(false);
     }
@@ -46,7 +47,6 @@ export default function DeviceHistoryView({ onUpdateSessionStatus, searchQuery =
     fetchDeviceSessions();
   }, []);
 
-  // Filter sessions based on search & status filter
   const filteredSessions = sessions.filter((session) => {
     const q = searchQuery.toLowerCase();
     const userNameStr = (session.userName || `User #${session.userId}`).toLowerCase();
@@ -95,22 +95,28 @@ export default function DeviceHistoryView({ onUpdateSessionStatus, searchQuery =
     return 'N/A';
   };
 
-  const handleStatusUpdate = (sessionId, newStatus) => {
-    setSessions((prevSessions) =>
-      prevSessions.map((s) =>
-        s.id === sessionId ? { ...s, status: newStatus } : s
-      )
-    );
-    if (selectedSession && selectedSession.id === sessionId) {
-      setSelectedSession((prev) => ({ ...prev, status: newStatus }));
-    }
-    if (onUpdateSessionStatus) {
-      onUpdateSessionStatus(sessionId, newStatus);
+  const handleStatusUpdate = async (sessionId, newStatus) => {
+    try {
+      const token = localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('fincore_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      await axios.put(`/api/devices/${sessionId}/status`, { status: newStatus }, { headers });
+
+      setSessions((prevSessions) =>
+        prevSessions.map((s) =>
+          s.id === sessionId ? { ...s, status: newStatus } : s
+        )
+      );
+      if (selectedSession && selectedSession.id === sessionId) {
+        setSelectedSession((prev) => ({ ...prev, status: newStatus }));
+      }
+      if (onUpdateSessionStatus) {
+        onUpdateSessionStatus(sessionId, newStatus);
+      }
+    } catch (err) {
+      console.error('Failed to update session status:', err);
     }
   };
 
-  // Render Status Pill Badge according to exact requirements:
-  // Gray for "Unverified", Blue for "Verified", Green for "Trusted", Red for "Flagged"
   const renderStatusBadge = (status) => {
     switch (status) {
       case 'Unverified':
@@ -186,7 +192,7 @@ export default function DeviceHistoryView({ onUpdateSessionStatus, searchQuery =
         <div className="bg-white rounded-xl border border-slate-200/80 p-12 shadow-sm flex flex-col items-center justify-center space-y-4 min-h-[300px]">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
           <p className="text-xs font-semibold text-slate-500 animate-pulse">
-            Fetching live device sessions telemetry from server...
+            Fetching live device sessions telemetry from PostgreSQL database...
           </p>
         </div>
       )}
@@ -232,7 +238,7 @@ export default function DeviceHistoryView({ onUpdateSessionStatus, searchQuery =
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <ShieldAlert className="w-8 h-8 mx-auto mb-2 opacity-50 text-slate-400" />
-                      <p className="text-sm font-medium">No session logs match your criteria.</p>
+                      <p className="text-sm font-medium">No device session logs match your criteria.</p>
                     </td>
                   </tr>
                 ) : (

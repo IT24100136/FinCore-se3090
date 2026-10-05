@@ -1,32 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import DeviceAnalyticsView from './DeviceAnalyticsView';
 import UserManagementView from './UserManagementView';
 import DeviceHistoryView from './DeviceHistoryView';
 import NotificationLogView from './NotificationLogView';
-import { 
-  MOCK_USERS, 
-  MOCK_DEVICE_SESSIONS, 
-  MOCK_NOTIFICATION_LOGS 
-} from './mockData';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export default function FinCoreAdminDashboard() {
-  // Navigation State between 4 Views: 'analytics' | 'users' | 'devices' | 'notifications'
   const [activeView, setActiveView] = useState('analytics');
 
-  // Dynamic Data States
-  const [users, setUsers] = useState(MOCK_USERS);
-  const [sessions, setSessions] = useState(MOCK_DEVICE_SESSIONS);
-  const [logs, setLogs] = useState(MOCK_NOTIFICATION_LOGS);
-  
-  // Header Search & Refresh States
+  // Dynamic PostgreSQL state
+  const [users, setUsers] = useState([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [userError, setUserError] = useState(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // Show temporary toast message
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => {
@@ -34,62 +27,57 @@ export default function FinCoreAdminDashboard() {
     }, 3500);
   };
 
-  // Toggle user active / suspended status
-  const handleToggleUserStatus = (userId, newStatus) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((u) =>
-        u.id === userId ? { ...u, status: newStatus } : u
-      )
-    );
-
-    const targetUser = users.find((u) => u.id === userId);
-    showToast(
-      `Account ${targetUser ? targetUser.name : userId} is now ${newStatus}`,
-      newStatus === 'Suspended' ? 'warning' : 'success'
-    );
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    setUserError(null);
+    try {
+      const token = localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('fincore_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get('/api/users', { headers });
+      setUsers(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch user accounts:', err);
+      setUserError(err.message || 'Failed to fetch user accounts from database.');
+    } finally {
+      setIsLoadingUsers(false);
+    }
   };
 
-  // Update session status (Trusted, Verified, Unverified, Flagged)
-  const handleUpdateSessionStatus = (sessionId, newStatus) => {
-    setSessions((prevSessions) =>
-      prevSessions.map((s) =>
-        s.id === sessionId ? { ...s, status: newStatus } : s
-      )
-    );
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
-    showToast(`Device session ${sessionId} status updated to ${newStatus}`, 'info');
+  const handleToggleUserStatus = async (userId, newStatus) => {
+    try {
+      const token = localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('fincore_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
+      await axios.put(`/api/users/${userId}/status`, { status: newStatus }, { headers });
+
+      setUsers((prevUsers) =>
+        prevUsers.map((u) =>
+          u.id === userId ? { ...u, status: newStatus } : u
+        )
+      );
+
+      const targetUser = users.find((u) => u.id === userId);
+      showToast(
+        `Account ${targetUser ? targetUser.name : userId} is now ${newStatus}`,
+        newStatus === 'Suspended' ? 'warning' : 'success'
+      );
+    } catch (err) {
+      console.error('Failed to update user status:', err);
+      showToast('Failed to update account status in database', 'warning');
+    }
   };
 
-  // Resend failed notification
-  const handleResendNotification = (logId) => {
-    const nowStr = new Date().toLocaleString('sv').replace(' ', ' ');
-    setLogs((prevLogs) =>
-      prevLogs.map((log) =>
-        log.id === logId
-          ? {
-              ...log,
-              deliveryStatus: 'Sent',
-              timestamp: nowStr,
-              latencyMs: Math.floor(Math.random() * 200) + 150
-            }
-          : log
-      )
-    );
-
-    showToast(`Notification ${logId} successfully re-dispatched!`, 'success');
-  };
-
-  // Simulate manual data refresh
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
+    fetchUsers().finally(() => {
       setIsRefreshing(false);
       showToast('Admin data telemetry successfully refreshed', 'info');
-    }, 700);
+    });
   };
-
-  // Count flagged devices/users for sidebar badge
-  const flaggedCount = sessions.filter((s) => s.status === 'Flagged').length;
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800 antialiased overflow-hidden">
@@ -97,7 +85,7 @@ export default function FinCoreAdminDashboard() {
       <Sidebar
         activeView={activeView}
         setActiveView={setActiveView}
-        flaggedCount={flaggedCount}
+        flaggedCount={0}
       />
 
       {/* Main Content Area */}
@@ -124,6 +112,9 @@ export default function FinCoreAdminDashboard() {
             {activeView === 'users' && (
               <UserManagementView
                 users={users}
+                isLoading={isLoadingUsers}
+                error={userError}
+                onRetry={fetchUsers}
                 onToggleUserStatus={handleToggleUserStatus}
                 searchQuery={searchQuery}
               />
@@ -131,16 +122,12 @@ export default function FinCoreAdminDashboard() {
 
             {activeView === 'devices' && (
               <DeviceHistoryView
-                sessions={sessions}
-                onUpdateSessionStatus={handleUpdateSessionStatus}
                 searchQuery={searchQuery}
               />
             )}
 
             {activeView === 'notifications' && (
               <NotificationLogView
-                logs={logs}
-                onResendNotification={handleResendNotification}
                 searchQuery={searchQuery}
               />
             )}

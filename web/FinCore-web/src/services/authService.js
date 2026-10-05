@@ -3,10 +3,31 @@ import axios from 'axios';
 const API_BASE_URL = '/api/auth';
 const DEVICES_API_URL = '/api/devices';
 
+// Axios Request Interceptor for JWT Bearer Token
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('fincore_token');
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const getOrGenerateDeviceFingerprint = () => {
   let fp = localStorage.getItem('device_fingerprint');
   if (!fp) {
-    fp = `web-fp-${Math.random().toString(36).substring(2, 11)}-${Date.now()}`;
+    const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
+    const screenRes = typeof window !== 'undefined' && window.screen ? `${window.screen.width}x${window.screen.height}` : '1920x1080';
+    const platform = typeof navigator !== 'undefined' ? (navigator.platform || 'Web') : 'Web';
+    const lang = typeof navigator !== 'undefined' ? (navigator.language || 'en') : 'en';
+
+    let hash = 0;
+    const rawSeed = `${platform}-${screenRes}-${lang}-${ua}`;
+    for (let i = 0; i < rawSeed.length; i++) {
+      hash = ((hash << 5) - hash) + rawSeed.charCodeAt(i);
+      hash |= 0;
+    }
+    const hexHash = Math.abs(hash).toString(16).padStart(8, '0');
+    fp = `web-fp-${hexHash}`;
     localStorage.setItem('device_fingerprint', fp);
   }
   return fp;
@@ -33,14 +54,16 @@ export const parseJwt = (token) => {
 
 export const verifyDevice = async (userId, deviceFingerprint, ipAddress = '127.0.0.1') => {
   try {
+    const token = getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await axios.post(`${DEVICES_API_URL}/verify`, {
       userId: parseInt(userId, 10),
       deviceFingerprint,
       ipAddress,
-    });
+    }, { headers });
     return response.data;
   } catch (err) {
-    console.warn('Device verification non-fatal warning:', err);
+    console.warn('Device verification warning:', err);
     return null;
   }
 };
@@ -53,10 +76,10 @@ export const login = async (identifier, password) => {
 
   const data = response.data;
   if (data?.token) {
+    localStorage.setItem('jwt_token', data.token);
     localStorage.setItem('token', data.token);
     localStorage.setItem('fincore_token', data.token);
 
-    // Build user object from server response or decoded JWT
     const claims = parseJwt(data.token);
     const resolvedRole = data.user?.role || claims?.role || claims?.Role || 'Analyst';
     const userObj = {
@@ -70,7 +93,6 @@ export const login = async (identifier, password) => {
 
     localStorage.setItem('fincore_user', JSON.stringify(userObj));
 
-    // Automated device session binding
     const rawUserId = userObj.id || 1;
     const numericUserId = parseInt(rawUserId, 10) || Math.abs(String(rawUserId).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0));
     const deviceFingerprint = getOrGenerateDeviceFingerprint();
@@ -103,6 +125,7 @@ export const register = async (staffData) => {
 
   const data = response.data;
   if (data?.token) {
+    localStorage.setItem('jwt_token', data.token);
     localStorage.setItem('token', data.token);
     localStorage.setItem('fincore_token', data.token);
     if (data.user) {
@@ -114,7 +137,7 @@ export const register = async (staffData) => {
 };
 
 export const getToken = () => {
-  return localStorage.getItem('fincore_token') || localStorage.getItem('token');
+  return localStorage.getItem('jwt_token') || localStorage.getItem('token') || localStorage.getItem('fincore_token');
 };
 
 export const getCurrentUser = () => {
@@ -128,6 +151,7 @@ export const getCurrentUser = () => {
 };
 
 export const logout = () => {
+  localStorage.removeItem('jwt_token');
   localStorage.removeItem('token');
   localStorage.removeItem('fincore_token');
   localStorage.removeItem('fincore_user');

@@ -9,6 +9,7 @@ namespace FinCore.Api.Models
         public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
         public string Role { get; set; } = "Customer";  // "Customer", "Analyst", or "Admin"
+        public string Status { get; set; } = "Active"; // "Active" or "Suspended"
         public string? EmployeeId { get; set; }
         public string? Department { get; set; }
         public string? Tier { get; set; }

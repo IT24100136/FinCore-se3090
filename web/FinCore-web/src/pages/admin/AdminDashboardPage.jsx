@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import TransactionMonitoringDashboard from './TransactionMonitoringDashboard';
+import FinancialReversalsPage from './FinancialReversalsPage';
 import RuleConfigurationPanel from '../../components/fraud/RuleConfigurationPanel';
 import FinCoreAdminDashboard from '../../components/admin/FinCoreAdminDashboard';
 import AnalyticsSummaryPage from './AnalyticsSummaryPage';
-import { Activity, Sliders, Users, BarChart3, ShieldCheck } from 'lucide-react';
+import { Activity, RotateCcw, Sliders, Users, BarChart3, ShieldCheck } from 'lucide-react';
 
 export default function AdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'rules' | 'users-devices' | 'analytics'
+  const [activeTab, setActiveTab] = useState('transactions'); // 'transactions' | 'reversals' | 'rules' | 'users-devices' | 'analytics'
 
   const tabs = [
-    { id: 'transactions', label: 'Transaction Monitoring & Reversals', icon: Activity },
+    { id: 'transactions', label: 'Transaction Monitoring', icon: Activity },
+    { id: 'reversals', label: 'Financial Reversals', icon: RotateCcw },
     { id: 'rules', label: 'Rule Configuration', icon: Sliders },
     { id: 'users-devices', label: 'Users & Device Control', icon: Users },
     { id: 'analytics', label: 'System Analytics', icon: BarChart3 },
@@ -88,6 +90,9 @@ export default function AdminDashboardPage() {
       <div style={{ flex: 1 }}>
         {activeTab === 'transactions' && (
           <TransactionMonitoringDashboard />
+        )}
+        {activeTab === 'reversals' && (
+          <FinancialReversalsPage />
         )}
         {activeTab === 'rules' && (
           <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>

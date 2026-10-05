@@ -21,30 +21,94 @@ namespace FinCore.Api.Controllers
         }
 
         /// <summary>
-        /// Retrieves device session history for a specific user.
-        /// GET /api/devices/{userId}/sessions
+        /// Retrieves all device sessions across users for Admin Device History view.
+        /// GET /api/devices/sessions
         /// </summary>
-        [HttpGet("{userId}/sessions")]
-        public async Task<IActionResult> GetUserSessions(int userId)
+        [HttpGet("sessions")]
+        public async Task<IActionResult> GetAllSessions()
         {
             var sessions = await _context.DeviceSessions
-                .Where(d => d.UserId == userId || userId == 1) // Default or specific user
                 .OrderByDescending(d => d.LastLoginAt)
                 .ToListAsync();
 
             if (!sessions.Any())
             {
-                // Seed initial device sessions if empty for demonstration/testing
-                sessions = GetInitialSeedSessions(userId);
+                sessions = GetInitialSeedSessions(1);
                 _context.DeviceSessions.AddRange(sessions);
                 await _context.SaveChangesAsync();
             }
 
-            return Ok(sessions);
+            var users = await _context.Users.AsNoTracking().ToListAsync();
+
+            var sessionDtos = sessions.Select(s =>
+            {
+                var user = users.FirstOrDefault(u => DbInitializer.GetDeterministicUserId(u.Id) == s.UserId || s.UserId == 1);
+                return new
+                {
+                    id = s.Id,
+                    userId = s.UserId,
+                    userName = user?.Name ?? $"User #{s.UserId}",
+                    userEmail = user?.Email ?? "user@fincore.com",
+                    deviceFingerprint = s.DeviceFingerprint,
+                    ipAddress = s.IpAddress,
+                    location = GetLocationFromIp(s.IpAddress),
+                    status = s.Status,
+                    lastLoginAt = s.LastLoginAt,
+                    lastLoginTime = s.LastLoginAt.ToString("yyyy-MM-dd HH:mm:ss UTC"),
+                    reason = s.Status == "Flagged" ? "Suspicious TOR IP exit node / unusual device fingerprint" : "Recognized device authentication"
+                };
+            }).ToList();
+
+            return Ok(sessionDtos);
         }
 
         /// <summary>
-        /// Verifies a device session fingerprint upon login. Creates Unverified status & AuditLog if new device.
+        /// Retrieves device session history for a specific user (or all if userId is 0/1).
+        /// GET /api/devices/{userId}/sessions
+        /// </summary>
+        [HttpGet("{userId:int}/sessions")]
+        public async Task<IActionResult> GetUserSessions(int userId)
+        {
+            var sessions = await _context.DeviceSessions
+                .Where(d => userId <= 0 || d.UserId == userId || userId == 1)
+                .OrderByDescending(d => d.LastLoginAt)
+                .ToListAsync();
+
+            if (!sessions.Any())
+            {
+                sessions = GetInitialSeedSessions(userId <= 0 ? 1 : userId);
+                _context.DeviceSessions.AddRange(sessions);
+                await _context.SaveChangesAsync();
+            }
+
+            var users = await _context.Users.AsNoTracking().ToListAsync();
+
+            var sessionDtos = sessions.Select(s =>
+            {
+                var user = users.FirstOrDefault(u => DbInitializer.GetDeterministicUserId(u.Id) == s.UserId);
+                return new
+                {
+                    id = s.Id,
+                    userId = s.UserId,
+                    userName = user?.Name ?? $"User #{s.UserId}",
+                    userEmail = user?.Email ?? "user@fincore.com",
+                    deviceFingerprint = s.DeviceFingerprint,
+                    ipAddress = s.IpAddress,
+                    location = GetLocationFromIp(s.IpAddress),
+                    status = s.Status,
+                    lastLoginAt = s.LastLoginAt,
+                    lastLoginTime = s.LastLoginAt.ToString("yyyy-MM-dd HH:mm:ss UTC"),
+                    reason = s.Status == "Flagged" ? "Suspicious TOR IP exit node / unusual device fingerprint" : "Recognized device authentication"
+                };
+            }).ToList();
+
+            return Ok(sessionDtos);
+        }
+
+        /// <summary>
+        /// Verifies a device session fingerprint upon login.
+        /// Strictly queries by UserId AND DeviceFingerprint.
+        /// Updates LastLoginAt on existing session record if found; creates Unverified record if new.
         /// POST /api/devices/verify
         /// </summary>
         [HttpPost("verify")]
@@ -55,6 +119,7 @@ namespace FinCore.Api.Controllers
                 return BadRequest(ModelState);
             }
 
+            // Strictly query by UserId AND DeviceFingerprint
             var existingSession = await _context.DeviceSessions
                 .FirstOrDefaultAsync(d => d.UserId == request.UserId && d.DeviceFingerprint == request.DeviceFingerprint);
 
@@ -85,7 +150,7 @@ namespace FinCore.Api.Controllers
                 {
                     UserId = request.UserId,
                     DeviceFingerprint = request.DeviceFingerprint,
-                    IpAddress = request.IpAddress,
+                    IpAddress = request.IpAddress ?? "127.0.0.1",
                     Status = "Unverified",
                     LastLoginAt = DateTime.UtcNow
                 };
@@ -98,7 +163,7 @@ namespace FinCore.Api.Controllers
                     UserId = request.UserId,
                     Action = "NEW_DEVICE_DETECTED",
                     Timestamp = DateTime.UtcNow,
-                    IpAddress = request.IpAddress ?? string.Empty,
+                    IpAddress = request.IpAddress ?? "127.0.0.1",
                     Details = $"New unrecognized device detected (Fingerprint: {request.DeviceFingerprint})"
                 });
 
@@ -149,7 +214,6 @@ namespace FinCore.Api.Controllers
             session.Status = "Verified";
             session.LastLoginAt = DateTime.UtcNow;
 
-            // Audit log for device confirmation
             _context.AuditLogs.Add(new AuditLog
             {
                 UserId = session.UserId,
@@ -176,7 +240,7 @@ namespace FinCore.Api.Controllers
         /// Updates a device session status directly by ID (e.g. Unverified, Verified, Trusted, Flagged).
         /// PUT /api/devices/{id}/status
         /// </summary>
-        [HttpPut("{id}/status")]
+        [HttpPut("{id:int}/status")]
         public async Task<IActionResult> UpdateDeviceStatus(int id, [FromBody] UpdateDeviceStatusDto request)
         {
             if (!ModelState.IsValid)
@@ -193,7 +257,6 @@ namespace FinCore.Api.Controllers
             session.Status = request.Status;
             session.LastLoginAt = DateTime.UtcNow;
 
-            // Audit log for device status update
             _context.AuditLogs.Add(new AuditLog
             {
                 UserId = session.UserId,
@@ -212,6 +275,15 @@ namespace FinCore.Api.Controllers
                 status = session.Status,
                 lastLoginAt = session.LastLoginAt
             });
+        }
+
+        private string GetLocationFromIp(string? ip)
+        {
+            if (string.IsNullOrWhiteSpace(ip)) return "Colombo, Sri Lanka";
+            if (ip.StartsWith("192.168") || ip.StartsWith("127.") || ip.StartsWith("10.")) return "Colombo, Sri Lanka";
+            if (ip.StartsWith("172.56")) return "New York, NY, USA";
+            if (ip.StartsWith("185.220")) return "Frankfurt, Germany";
+            return "Colombo, Sri Lanka";
         }
 
         private System.Collections.Generic.List<DeviceSession> GetInitialSeedSessions(int userId)

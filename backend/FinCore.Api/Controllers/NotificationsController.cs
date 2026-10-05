@@ -42,6 +42,27 @@ namespace FinCore.Api.Controllers
         }
 
         /// <summary>
+        /// GET /api/notifications/logs
+        /// Retrieves all system notification logs for Admin Notification Log Viewer.
+        /// </summary>
+        [HttpGet("logs")]
+        public async Task<IActionResult> GetAllLogs()
+        {
+            var notifications = await _context.Notifications
+                .OrderByDescending(n => n.Timestamp)
+                .ToListAsync();
+
+            if (!notifications.Any())
+            {
+                notifications = GetInitialSeedNotifications(1);
+                _context.Notifications.AddRange(notifications);
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(notifications);
+        }
+
+        /// <summary>
         /// GET /api/notifications
         /// Retrieves notifications for the current authenticated user (or specified query params).
         /// </summary>
@@ -71,7 +92,6 @@ namespace FinCore.Api.Controllers
 
             if (!notifications.Any() && targetUserId > 0)
             {
-                // Seed starter notification if completely empty for this user
                 notifications = GetInitialSeedNotifications(targetUserId);
                 _context.Notifications.AddRange(notifications);
                 await _context.SaveChangesAsync();
@@ -90,7 +110,7 @@ namespace FinCore.Api.Controllers
         /// PUT /api/notifications/{id}/read
         /// Marks a specific notification as read.
         /// </summary>
-        [HttpPut("{id}/read")]
+        [HttpPut("{id:int}/read")]
         public async Task<IActionResult> MarkAsRead(int id)
         {
             var notification = await _context.Notifications.FirstOrDefaultAsync(n => n.Id == id);
@@ -168,7 +188,7 @@ namespace FinCore.Api.Controllers
                 Action = "NOTIFICATION_SENT",
                 Timestamp = DateTime.UtcNow,
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1",
-                Details = $"Sent {notification.Type} notification to {notification.Recipient} (Status: {notification.DeliveryStatus})"
+                Details = $"Sent {notification.Type} notification to customer {notification.Recipient} ({notification.RecipientName}) - Status: {notification.DeliveryStatus}"
             });
 
             await _context.SaveChangesAsync();
@@ -184,13 +204,13 @@ namespace FinCore.Api.Controllers
         public async Task<IActionResult> GetNotifications(int userId)
         {
             var notifications = await _context.Notifications
-                .Where(n => n.UserId == userId || userId == 1)
+                .Where(n => n.UserId == userId || userId <= 0)
                 .OrderByDescending(n => n.Timestamp)
                 .ToListAsync();
 
             if (!notifications.Any())
             {
-                notifications = GetInitialSeedNotifications(userId);
+                notifications = GetInitialSeedNotifications(userId <= 0 ? 1 : userId);
                 _context.Notifications.AddRange(notifications);
                 await _context.SaveChangesAsync();
             }
@@ -231,6 +251,36 @@ namespace FinCore.Api.Controllers
                     IsRead = false,
                     LatencyMs = 85,
                     Timestamp = DateTime.UtcNow.AddHours(-1)
+                },
+                new Notification
+                {
+                    UserId = userId,
+                    Recipient = "+94771234567",
+                    RecipientName = "Kasun Perera",
+                    Title = "Security Verification OTP",
+                    Type = "SMS",
+                    Message = "FinCore Security: Your verification passcode is 849-201. Valid for 5 minutes.",
+                    DeliveryStatus = "Sent",
+                    ChannelDetails = "Twilio SMS Gateway",
+                    Category = "securityPause",
+                    IsRead = false,
+                    LatencyMs = 340,
+                    Timestamp = DateTime.UtcNow.AddHours(-3)
+                },
+                new Notification
+                {
+                    UserId = userId,
+                    Recipient = "kasun@fincore.com",
+                    RecipientName = "Kasun Perera",
+                    Title = "Transfer Hold Notice",
+                    Type = "Email",
+                    Message = "Security Alert: Your transfer of LKR 75,000 has been held for review by the security system.",
+                    DeliveryStatus = "Sent",
+                    ChannelDetails = "Brevo SMTP Relay",
+                    Category = "accountWarning",
+                    IsRead = false,
+                    LatencyMs = 210,
+                    Timestamp = DateTime.UtcNow.AddHours(-6)
                 }
             };
         }
