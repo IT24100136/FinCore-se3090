@@ -175,7 +175,6 @@ export default function AnalystReviewPage() {
         try {
             const data = await reviewService.getQueue();
             const allItems = data.items || [];
-            // Prefer items that have valid queueCode and amount from real/seeded cases
             const validItems = allItems.filter(item => item.queueCode && item.queueCode.trim() !== '' && (Number(item.amount) > 0 || item.senderName));
             const enriched = validItems.map((item, index) => normalizeCase(item, index));
             setQueue(enriched);
@@ -184,7 +183,6 @@ export default function AnalystReviewPage() {
                 loadHistory(enriched[0].transactionId);
             }
 
-            // Fetch performance analytics
             try {
                 const perf = await reviewService.getPerformanceMetrics();
                 setMetrics(perf);
@@ -404,7 +402,6 @@ export default function AnalystReviewPage() {
                     message: `Information requested from customer/branch for case ${selectedCase.queueId}.`
                 });
             } else if (selectedCase.status === 'PendingSecondApproval') {
-                // Secondary approval path (Maker-Checker Level 2)
                 await reviewService.secondApproval(selectedCase.transactionId, {
                     secondAnalystId: currentAnalystId,
                     analystId: currentAnalystId,
@@ -448,19 +445,6 @@ export default function AnalystReviewPage() {
         }
     };
 
-    const handleSeedData = async () => {
-        try {
-            setLoading(true);
-            await reviewService.seedTestData();
-            await loadData();
-            setActionFeedback({ type: 'info', message: 'Prototype test cases seeded successfully.' });
-        } catch (err) {
-            alert("Seeding failed: " + (err.response?.data?.message || err.message));
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const filteredQueue = queue.filter(item => {
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase().trim();
@@ -480,7 +464,6 @@ export default function AnalystReviewPage() {
         return true;
     });
 
-    // Active cases available for navigation (using filtered subset if active, or entire queue)
     const activeCaseList = (filteredQueue && filteredQueue.length > 0) ? filteredQueue : queue;
     const currentCaseIndex = activeCaseList.findIndex(
         c => (c.transactionId && c.transactionId === selectedCase?.transactionId) || (c.id && c.id === selectedCase?.id)
@@ -488,7 +471,6 @@ export default function AnalystReviewPage() {
     const hasPrevCase = currentCaseIndex > 0;
     const hasNextCase = currentCaseIndex >= 0 && currentCaseIndex < activeCaseList.length - 1;
 
-    // Auto-select first case if navigating to Case Detail without a selection
     useEffect(() => {
         if (activeTab === 'case-detail' && !selectedCase && queue.length > 0) {
             setSelectedCase(queue[0]);
@@ -496,119 +478,117 @@ export default function AnalystReviewPage() {
         }
     }, [activeTab, selectedCase, queue]);
 
-    const handleSwitchCase = (targetCase) => {
-        if (!targetCase) return;
-        setSelectedCase(targetCase);
-        setNotes('');
-        setActionFeedback(null);
-        loadHistory(targetCase.transactionId);
+    const getScoreBadgeColor = (score) => {
+        if (score >= 70) return 'bg-red-50 text-red-600 border-red-200';
+        if (score >= 40) return 'bg-amber-50 text-amber-700 border-amber-200';
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     };
 
-    const handlePrevCase = () => {
-        if (hasPrevCase) {
-            handleSwitchCase(activeCaseList[currentCaseIndex - 1]);
-        }
-    };
-
-    const handleNextCase = () => {
-        if (hasNextCase) {
-            handleSwitchCase(activeCaseList[currentCaseIndex + 1]);
-        }
-    };
-
-    const calculateElapsed = (dateStr) => {
-        if (!dateStr) return 'Just now';
-        const diffMs = Date.now() - new Date(dateStr).getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins} minutes ago`;
-        const diffHours = Math.floor(diffMins / 60);
-        return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    const getScoreBarFillColor = (score) => {
+        if (score >= 70) return 'bg-red-600';
+        if (score >= 40) return 'bg-amber-500';
+        return 'bg-emerald-500';
     };
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh', width: '100%', backgroundColor: '#f1f5f9', fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
+        <div className="flex min-h-screen w-full bg-slate-50 font-sans text-gray-900">
 
-            {/* 1. Left Dark Navy Sidebar (#091124) */}
-            <aside style={{ width: '250px', backgroundColor: '#091124', color: '#94a3b8', display: 'flex', flexDirection: 'column', flexShrink: 0, borderRight: '1px solid #1e293b' }}>
+            {/* 1. Left Dark Navy Sidebar (bg-slate-900) */}
+            <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 min-h-screen select-none">
                 {/* Brand */}
-                <div style={{ padding: '24px 20px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #1e293b' }}>
-                    <div style={{ backgroundColor: '#2563eb', color: '#fff', fontWeight: 800, padding: '7px 11px', borderRadius: '8px', fontSize: '15px', boxShadow: '0 2px 6px rgba(37,99,235,0.4)' }}>
+                <div className="p-5 border-b border-slate-800 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm shadow-md shadow-blue-600/30">
                         FC
                     </div>
                     <div>
-                        <div style={{ color: '#fff', fontWeight: 700, fontSize: '16px', letterSpacing: '0.4px' }}>FinCore</div>
-                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.8px' }}>FRAUD INTELLIGENCE</div>
+                        <div className="font-bold text-base tracking-tight text-white">FinCore</div>
+                        <div className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">FRAUD INTELLIGENCE</div>
                     </div>
                 </div>
 
                 {/* Navigation Items */}
-                <nav style={{ padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto' }}>
+                <nav className="p-3 flex flex-col gap-1 flex-1 overflow-y-auto">
 
-                    {/* 0. TRANSACTION MONITORING (All Transactions View) */}
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '0 12px 6px', letterSpacing: '0.6px' }}>
-                        MONITORING (All Transactions)
+                    {/* MONITORING Category */}
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-2">
+                        MONITORING
                     </div>
 
                     <button
                         onClick={() => navigate('/admin/transactions')}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: '#38bdf8', backgroundColor: '#0f172a', border: '1px solid #1e3a8a', cursor: 'pointer', fontSize: '13px', fontWeight: 600, width: '100%', textAlign: 'left', marginBottom: '14px', transition: 'all 0.15s ease' }}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-sky-400 bg-slate-800/80 border border-sky-500/30 hover:bg-slate-800 transition-colors"
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Activity size={18} /> Transaction Monitoring
+                        <div className="flex items-center gap-2.5">
+                            <Activity className="w-4 h-4" /> Transaction Monitoring
                         </div>
-                        <ArrowUpRight size={14} />
+                        <ArrowUpRight className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* 1. FRAUD DETECTION (Engine) */}
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '0 12px 8px', letterSpacing: '0.6px' }}>
-                        FRAUD DETECTION (Engine)
+                    {/* FRAUD DETECTION Category */}
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-3">
+                        FRAUD DETECTION
                     </div>
 
                     <button
                         onClick={() => setActiveTab('fraud-flags')}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-flags' || activeTab === 'flag-detail' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                            activeTab === 'fraud-flags' || activeTab === 'flag-detail'
+                                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Flag size={18} /> Fraud Flags
+                        <div className="flex items-center gap-2.5">
+                            <Flag className="w-4 h-4" /> Fraud Flags
                         </div>
-                        <span style={{ backgroundColor: activeTab === 'fraud-flags' ? '#1d4ed8' : '#dc2626', color: '#fff', fontSize: '10px', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
+                        <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                             LIVE
                         </span>
                     </button>
 
                     <button
                         onClick={() => setActiveTab('fraud-rules')}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-rules' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-rules' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                            activeTab === 'fraud-rules'
+                                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Sliders size={18} /> Fraud Rules
+                        <div className="flex items-center gap-2.5">
+                            <Sliders className="w-4 h-4" /> Fraud Rules
                         </div>
-                        <span style={{ fontSize: '10px', color: activeTab === 'fraud-rules' ? '#bfdbfe' : '#64748b', fontWeight: 600, backgroundColor: activeTab === 'fraud-rules' ? '#1d4ed8' : '#1e293b', padding: '1px 6px', borderRadius: '6px' }}>
+                        <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
                             Thresholds
                         </span>
                     </button>
 
                     <button
                         onClick={() => setActiveTab('fraud-trends')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'fraud-trends' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'fraud-trends' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                            activeTab === 'fraud-trends'
+                                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
-                        <TrendingUp size={18} /> Flagging Trends
+                        <TrendingUp className="w-4 h-4" /> Flagging Trends
                     </button>
 
-                    {/* 2. ANALYST REVIEW (Operations) */}
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>
-                        ANALYST REVIEW (Operations)
+                    {/* ANALYST REVIEW Category */}
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-3">
+                        ANALYST REVIEW
                     </div>
 
                     <button
                         onClick={() => setActiveTab('review-queue')}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'review-queue' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'review-queue' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                            activeTab === 'review-queue'
+                                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Inbox size={18} /> Review Queue
+                        <div className="flex items-center gap-2.5">
+                            <Inbox className="w-4 h-4" /> Review Queue
                         </div>
-                        <span style={{ backgroundColor: '#dc2626', color: '#fff', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                        <span className="bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
                             {metrics.totalCases || queue.length || 0}
                         </span>
                     </button>
@@ -624,13 +604,17 @@ export default function AnalystReviewPage() {
                                 setActiveTab('case-detail');
                             }
                         }}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'case-detail' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'case-detail' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                            activeTab === 'case-detail'
+                                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <FileText size={18} /> Case Detail
+                        <div className="flex items-center gap-2.5">
+                            <FileText className="w-4 h-4" /> Case Detail
                         </div>
                         {selectedCase && (
-                            <span style={{ fontSize: '11px', color: activeTab === 'case-detail' ? '#bfdbfe' : '#64748b', fontWeight: 700 }}>
+                            <span className="text-[10px] font-bold text-slate-400">
                                 {selectedCase.queueId}
                             </span>
                         )}
@@ -638,1050 +622,569 @@ export default function AnalystReviewPage() {
 
                     <button
                         onClick={() => setActiveTab('analytics')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'analytics' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'analytics' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                            activeTab === 'analytics'
+                                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
-                        <BarChart3 size={18} /> Analytics & Performance
+                        <BarChart3 className="w-4 h-4" /> Analytics &amp; Performance
                     </button>
 
                     <button
                         onClick={() => setActiveTab('audit-logs')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'audit-logs' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'audit-logs' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                            activeTab === 'audit-logs'
+                                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
-                        <FileCheck2 size={18} /> Audit Trails & History
+                        <FileCheck2 className="w-4 h-4" /> Audit Trails &amp; History
                     </button>
 
-                    {/* 3. FINANCIAL CORE & LEDGER (Admin Only - S1) */}
+                    {/* FINANCIAL CORE Category (Admin) */}
                     {isAdmin && (
                         <>
-                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', padding: '16px 12px 8px', letterSpacing: '0.6px' }}>
-                                FINANCIAL CORE &amp; LEDGER (ADMIN)
+                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-3">
+                                FINANCIAL CORE &amp; LEDGER
                             </div>
 
                             <button
                                 onClick={() => setActiveTab('transaction-monitor')}
-                                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'transaction-monitor' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'transaction-monitor' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                                    activeTab === 'transaction-monitor'
+                                        ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                }`}
                             >
-                                <Activity size={18} /> Transaction Monitor
+                                <Activity className="w-4 h-4" /> Transaction Monitor
                             </button>
 
                             <button
                                 onClick={() => setActiveTab('reversals')}
-                                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', color: activeTab === 'reversals' ? '#fff' : '#94a3b8', backgroundColor: activeTab === 'reversals' ? '#2563eb' : 'transparent', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, width: '100%', textAlign: 'left', transition: 'all 0.15s ease' }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
+                                    activeTab === 'reversals'
+                                        ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                }`}
                             >
-                                <RotateCcw size={18} /> Reversal Action
+                                <RotateCcw className="w-4 h-4" /> Reversal Action
                             </button>
                         </>
                     )}
                 </nav>
 
                 {/* Bottom User Profile */}
-                <div style={{ padding: '16px', borderTop: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700 }}>
+                <div className="p-3 m-3 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
                         {user?.fullName ? user.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'AN'}
                     </div>
-                    <div style={{ overflow: 'hidden' }}>
-                        <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 600 }}>{user?.fullName || 'Analyst Console'}</div>
-                        <div style={{ color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>REG: {user?.employeeId || (user?.role === 'Admin' ? 'ADM-001' : 'ANL-001')}</div>
+                    <div className="overflow-hidden">
+                        <div className="text-xs font-semibold text-slate-100 truncate">{user?.fullName || 'Analyst Console'}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">BADGE: {user?.employeeId || (isAdmin ? 'ADM-001' : 'ANL-001')}</div>
                     </div>
                 </div>
             </aside>
 
-            {/* 2. Main Content Workspace */}
-            <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* 2. Main Content Area */}
+            <main className="flex-1 flex flex-col min-h-screen bg-slate-50 overflow-hidden">
 
-                {/* Top Enterprise Platform Header Bar (#0d1527) */}
-                <header style={{ height: '56px', backgroundColor: '#0d1527', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 32px', flexShrink: 0 }}>
-                    {/* Real Enterprise Global Search Bar */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        backgroundColor: '#070c18',
-                        padding: '6px 14px',
-                        borderRadius: '8px',
-                        border: '1px solid #1e293b',
-                        width: '360px',
-                        transition: 'border-color 0.15s ease'
-                    }}>
-                        <Search size={15} color="#64748b" />
+                {/* Top Header Bar matching dark theme sidebar */}
+                <header className="h-14 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between shrink-0">
+                    {/* Global Search Bar */}
+                    <div className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg w-80">
+                        <Search className="w-4 h-4 text-slate-400 shrink-0" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search case ID, customer, TX code, IP..."
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#f8fafc',
-                                fontSize: '12px',
-                                outline: 'none',
-                                width: '100%',
-                                fontFamily: 'inherit'
-                            }}
+                            className="bg-transparent border-none text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none w-full"
                         />
                         {searchQuery && (
                             <button
                                 onClick={() => setSearchQuery('')}
-                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', padding: 0 }}
-                                title="Clear search"
+                                className="text-slate-400 hover:text-white text-xs cursor-pointer"
                             >
                                 ✕
                             </button>
                         )}
                     </div>
 
-                    {/* Right System Status & Live Production Indicators */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        {/* Live Production Environment Pill */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#38bdf8', fontWeight: 600, backgroundColor: '#0369a11a', padding: '5px 12px', borderRadius: '16px', border: '1px solid #0284c733' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#38bdf8', display: 'inline-block', boxShadow: '0 0 6px #38bdf8' }} />
+                    {/* Right Indicators & User Profile Badge */}
+                    <div className="flex items-center gap-4">
+                        {/* Live Production Pill */}
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 bg-sky-950/60 border border-sky-500/30 px-3 py-1 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.2)]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
                             Live Production
                         </div>
 
-                        {/* AI Pipeline Status */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#10b981', fontWeight: 600, backgroundColor: '#064e3b26', padding: '5px 12px', borderRadius: '16px', border: '1px solid #10b98133' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
+                        {/* AI Pipeline Pill */}
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.2)]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                             AI Pipeline: Operational
                         </div>
 
-                        {/* Real-time Notification Bell */}
-                        <div style={{ position: 'relative' }}>
-                            <div
-                                style={{
-                                    position: 'relative',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    backgroundColor: '#070c18',
-                                    border: '1px solid #1e293b'
-                                }}
-                                title="Active Alerts & Escalations"
-                                onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
-                            >
-                                <Bell size={16} color="#94a3b8" />
-                                {notifications.filter(n => !n.isRead).length > 0 && (
-                                    <span style={{
-                                        position: 'absolute',
-                                        top: '-4px',
-                                        right: '-4px',
-                                        minWidth: '16px',
-                                        height: '16px',
-                                        borderRadius: '8px',
-                                        backgroundColor: '#ef4444',
-                                        color: '#ffffff',
-                                        fontSize: '10px',
-                                        fontWeight: 800,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '0 4px',
-                                        border: '1.5px solid #070c18'
-                                    }}>
-                                        {notifications.filter(n => !n.isRead).length}
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* Notifications Dropdown Popover */}
-                            {isNotifDropdownOpen && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '42px',
-                                    right: '0',
-                                    width: '360px',
-                                    backgroundColor: '#ffffff',
-                                    borderRadius: '10px',
-                                    boxShadow: '0 12px 28px rgba(0,0,0,0.2)',
-                                    border: '1px solid #cbd5e1',
-                                    zIndex: 2000,
-                                    overflow: 'hidden'
-                                }}>
-                                    <div style={{
-                                        padding: '12px 16px',
-                                        borderBottom: '1px solid #e2e8f0',
-                                        backgroundColor: '#f8fafc',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center'
-                                    }}>
-                                        <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
-                                            Analyst Case Notifications
-                                        </div>
-                                        <button
-                                            onClick={() => setIsNotifDropdownOpen(false)}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '13px' }}
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                        {notifications.length === 0 ? (
-                                            <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
-                                                No notifications at this time.
-                                            </div>
-                                        ) : (
-                                            notifications.map(n => (
-                                                <div
-                                                    key={n.id}
-                                                    style={{
-                                                        padding: '12px 16px',
-                                                        borderBottom: '1px solid #f1f5f9',
-                                                        backgroundColor: n.isRead ? '#ffffff' : '#f0fdf4'
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                                        <span style={{ fontWeight: 700, fontSize: '12px', color: '#0f172a' }}>
-                                                            {n.title}
-                                                        </span>
-                                                        <span style={{ fontSize: '10px', color: '#64748b' }}>
-                                                            {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                        </span>
-                                                    </div>
-                                                    <p style={{ margin: 0, fontSize: '12px', color: '#334155', lineHeight: 1.4 }}>
-                                                        {n.message}
-                                                    </p>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Date */}
-                        <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500 }}>
-                            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                        {/* User Profile Badge with Role Tag */}
+                        <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700/60">
+                            <span className="text-xs font-semibold text-slate-200">
+                                {user?.fullName || 'Analyst'}
+                            </span>
+                            <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                                {user?.role?.toUpperCase() || 'ANALYST'}
+                            </span>
                         </div>
                     </div>
                 </header>
 
-                {/* Action Feedback Banner */}
-                {actionFeedback && (
-                    <div style={{
-                        padding: '12px 32px',
-                        backgroundColor: actionFeedback.type === 'approved' ? '#dcfce7' : actionFeedback.type === 'dual' ? '#fef3c7' : actionFeedback.type === 'rejected' ? '#fee2e2' : '#e0f2fe',
-                        borderBottom: '1px solid #cbd5e1',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: actionFeedback.type === 'approved' ? '#166534' : actionFeedback.type === 'dual' ? '#92400e' : actionFeedback.type === 'rejected' ? '#991b1b' : '#075985'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Check size={16} /> {actionFeedback.message}
-                        </div>
-                        <button onClick={() => setActionFeedback(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>✕</button>
-                    </div>
-                )}
+                {/* Main Content Workspace (Light Background) */}
+                <div className="flex-1 p-6 md:p-8 overflow-y-auto bg-slate-50">
 
-                {/* Scrollable Workspace */}
-                <div style={{ padding: '28px 36px', flex: 1, overflowY: 'auto' }}>
-
-                    {/* ============================================================== */}
-                    {/* TAB: REVIEW QUEUE VIEW                                          */}
-                    {/* ============================================================== */}
-                    {activeTab === 'review-queue' && (
-                        <div>
-                            {/* Title & Toolbar */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                                <div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: 500 }}>Platform &gt; Review Queue</div>
-                                    <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
-                                        Analyst Review Queue
-                                    </h1>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <button
-                                        onClick={handleSeedData}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontWeight: 600, color: '#334155', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
-                                    >
-                                        <Database size={15} /> Seed Figma Prototype Data
-                                    </button>
-                                    <button
-                                        onClick={loadData}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', backgroundColor: '#2563eb', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, color: '#fff', cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.3)' }}
-                                    >
-                                        <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
-                                    </button>
-                                </div>
+                    {/* Feedback Alert */}
+                    {actionFeedback && (
+                        <div className={`mb-6 p-4 rounded-lg border text-sm font-medium flex items-center justify-between shadow-sm ${
+                            actionFeedback.type === 'approved' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                            actionFeedback.type === 'rejected' ? 'bg-red-50 border-red-200 text-red-800' :
+                            actionFeedback.type === 'escalate' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                            'bg-blue-50 border-blue-200 text-blue-800'
+                        }`}>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle className="w-5 h-5 shrink-0" />
+                                <span>{actionFeedback.message}</span>
                             </div>
-
-                            {/* Subfilter Chips (Including "Assigned to Me" - Story 1) */}
-                            <div style={{ display: 'flex', gap: '10px', marginBottom: '24px' }}>
-                                <button
-                                    onClick={() => setFilterType('ALL')}
-                                    style={{ padding: '8px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: filterType === 'ALL' ? '1px solid #2563eb' : '1px solid #cbd5e1', backgroundColor: filterType === 'ALL' ? '#2563eb' : '#fff', color: filterType === 'ALL' ? '#fff' : '#475569', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.15s' }}
-                                >
-                                    All Flags
-                                </button>
-                                <button
-                                    onClick={() => setFilterType('ASSIGNED_TO_ME')}
-                                    style={{ padding: '8px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: filterType === 'ASSIGNED_TO_ME' ? '1px solid #2563eb' : '1px solid #cbd5e1', backgroundColor: filterType === 'ASSIGNED_TO_ME' ? '#2563eb' : '#fff', color: filterType === 'ASSIGNED_TO_ME' ? '#fff' : '#475569', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.15s' }}
-                                >
-                                    Assigned to Me
-                                </button>
-                                <button
-                                    onClick={() => setFilterType('CRITICAL')}
-                                    style={{ padding: '8px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: filterType === 'CRITICAL' ? '1px solid #2563eb' : '1px solid #cbd5e1', backgroundColor: filterType === 'CRITICAL' ? '#2563eb' : '#fff', color: filterType === 'CRITICAL' ? '#fff' : '#475569', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.15s' }}
-                                >
-                                    Urgent / High Score
-                                </button>
-                                <button
-                                    onClick={() => setFilterType('DUAL')}
-                                    style={{ padding: '8px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: filterType === 'DUAL' ? '1px solid #2563eb' : '1px solid #cbd5e1', backgroundColor: filterType === 'DUAL' ? '#2563eb' : '#fff', color: filterType === 'DUAL' ? '#fff' : '#475569', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.15s' }}
-                                >
-                                    Requires Dual Approval
-                                </button>
-                            </div>
-
-                            {/* 4 Metric KPI Cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '18px 22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a' }}>{metrics.totalCases}</div>
-                                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>Total Cases</div>
-                                </div>
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '18px 22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#dc2626' }}>{metrics.critical}</div>
-                                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>Critical</div>
-                                </div>
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '18px 22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#d97706' }}>{metrics.unassigned}</div>
-                                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>Unassigned</div>
-                                </div>
-                                <div style={{ background: '#fff', borderRadius: '10px', padding: '18px 22px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#2563eb' }}>{metrics.underReview}</div>
-                                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>Under Review</div>
-                                </div>
-                            </div>
-
-                            {/* Data Table */}
-                            <div style={{ backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', color: '#64748b', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                                            <th style={{ padding: '14px 20px' }}>Priority</th>
-                                            <th style={{ padding: '14px 20px' }}>Queue ID</th>
-                                            <th style={{ padding: '14px 20px' }}>Customer</th>
-                                            <th style={{ padding: '14px 20px' }}>Amount (LKR)</th>
-                                            <th style={{ padding: '14px 20px' }}>Risk Score</th>
-                                            <th style={{ padding: '14px 20px' }}>Assigned Analyst</th>
-                                            <th style={{ padding: '14px 20px' }}>Status</th>
-                                            <th style={{ padding: '14px 20px', textAlign: 'right' }}>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredQueue.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
-                                                    No review cases match this filter. Click 'Seed Figma Prototype Data' to populate demo records.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredQueue.map((item, idx) => (
-                                                <tr
-                                                    key={item.id || idx}
-                                                    style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.15s ease' }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
-                                                >
-                                                    <td style={{ padding: '14px 20px' }}>
-                                                        <span style={{
-                                                            padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                                            backgroundColor: item.priority === 'CRITICAL' ? '#fee2e2' : (item.priority === 'HIGH' ? '#fef3c7' : '#e0f2fe'),
-                                                            color: item.priority === 'CRITICAL' ? '#b91c1c' : (item.priority === 'HIGH' ? '#b45309' : '#0369a1')
-                                                        }}>
-                                                            • {item.priority}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '14px 20px', fontWeight: 700, color: '#2563eb' }}>{item.queueId}</td>
-                                                    <td style={{ padding: '14px 20px' }}>
-                                                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.customerName}</div>
-                                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.customerId}</div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 20px', fontWeight: 700, color: '#0f172a' }}>
-                                                        Rs. {item.amount.toLocaleString()}
-                                                    </td>
-                                                    <td style={{ padding: '14px 20px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <div style={{ width: '48px', height: '6px', borderRadius: '3px', backgroundColor: '#e2e8f0', overflow: 'hidden' }}>
-                                                                <div style={{ width: `${Math.min(item.riskScore, 100)}%`, height: '100%', backgroundColor: item.riskScore > 75 ? '#dc2626' : (item.riskScore >= 50 ? '#d97706' : '#16a34a') }} />
-                                                            </div>
-                                                            <span style={{ fontWeight: 700, color: item.riskScore > 75 ? '#dc2626' : (item.riskScore >= 50 ? '#d97706' : '#16a34a') }}>
-                                                                {item.riskScore}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 20px' }}>
-                                                        {item.status === 'Escalated' ? (
-                                                            item.isAssignedToMe ? (
-                                                                <span style={{ color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                    <UserCheck size={14} /> Assigned to you by {item.escalatedByName || 'Analyst'}
-                                                                </span>
-                                                            ) : (
-                                                                <span style={{ color: '#d97706', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                    <ArrowUpRight size={14} /> Escalated to: {item.assignedAnalystName || 'Analyst'}
-                                                                </span>
-                                                            )
-                                                        ) : item.isAssignedToMe ? (
-                                                            <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                                <UserCheck size={14} /> You
-                                                            </span>
-                                                        ) : item.assignedAnalystName ? (
-                                                            <span style={{ color: '#334155', fontWeight: 600 }}>{item.assignedAnalystName}</span>
-                                                        ) : item.assignedAnalystId ? (
-                                                            <span style={{ color: '#334155' }}>Assigned</span>
-                                                        ) : (
-                                                            <button
-                                                                onClick={(e) => handleAssignToMe(item, e)}
-                                                                style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, color: '#2563eb', cursor: 'pointer' }}
-                                                            >
-                                                                + Assign to Me
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ padding: '14px 20px' }}>
-                                                        <span style={{
-                                                            fontSize: '12px', fontWeight: 600,
-                                                            color: item.status === 'Queued' ? '#d97706' : (item.status === 'InformationRequested' ? '#0284c7' : item.status === 'PendingSecondApproval' ? '#9333ea' : item.status === 'Decided' ? '#16a34a' : '#2563eb')
-                                                        }}>
-                                                            • {item.status}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                                                        <button
-                                                            onClick={() => handleOpenCase(item)}
-                                                            style={{ backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', padding: '7px 16px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'background-color 0.15s ease', boxShadow: '0 1px 3px rgba(37,99,235,0.3)' }}
-                                                        >
-                                                            Open Case
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ============================================================== */}
-                    {/* TAB: CASE DETAIL VIEW (Stories 2, 3, 4)                         */}
-                    {/* ============================================================== */}
-                    {activeTab === 'case-detail' && !selectedCase && (
-                        <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '48px 24px', textAlign: 'center', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                                <FileText size={24} />
-                            </div>
-                            <h3 style={{ color: '#0f172a', margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700 }}>No Case Selected</h3>
-                            <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 20px 0' }}>
-                                Please select a transaction from the Review Queue or pick one of the available queue cases to inspect.
-                            </p>
-                            <button
-                                onClick={() => setActiveTab('review-queue')}
-                                style={{ padding: '9px 18px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
-                            >
-                                Open Review Queue
+                            <button onClick={() => setActionFeedback(null)} className="text-gray-400 hover:text-gray-600 font-bold">
+                                ✕
                             </button>
                         </div>
                     )}
 
-                    {activeTab === 'case-detail' && selectedCase && (
-                        <div>
-                            {/* Breadcrumb & Top Case Navigation Bar */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                    {/* VIEW: REVIEW QUEUE */}
+                    {activeTab === 'review-queue' && (
+                        <div className="space-y-6">
+
+                            {/* Header & Breadcrumb */}
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                 <div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: 500 }}>
-                                        <span
-                                            onClick={() => setActiveTab('review-queue')}
-                                            style={{ color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}
-                                        >
-                                            Review Queue
-                                        </span> &gt; Case Detail
+                                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                                        Platform &gt; Review Queue
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
-                                            Case Detail — {selectedCase.queueId}
-                                        </h1>
-                                        <span style={{
-                                            backgroundColor: selectedCase.priority === 'CRITICAL' ? '#fee2e2' : selectedCase.priority === 'HIGH' ? '#fef3c7' : '#e0f2fe',
-                                            color: selectedCase.priority === 'CRITICAL' ? '#dc2626' : selectedCase.priority === 'HIGH' ? '#b45309' : '#0369a1',
-                                            padding: '3px 10px',
-                                            borderRadius: '6px',
-                                            fontSize: '12px',
-                                            fontWeight: 800
-                                        }}>
-                                            {selectedCase.priority}
-                                        </span>
-                                    </div>
+                                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+                                        Analyst Review Queue
+                                    </h1>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                    {/* Prev / Next Quick Nav Controls */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '3px 6px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-                                        <button
-                                            onClick={handlePrevCase}
-                                            disabled={!hasPrevCase}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                padding: '6px 10px',
-                                                backgroundColor: hasPrevCase ? '#f8fafc' : 'transparent',
-                                                border: '1px solid',
-                                                borderColor: hasPrevCase ? '#cbd5e1' : 'transparent',
-                                                borderRadius: '4px',
-                                                fontSize: '12px',
-                                                fontWeight: 600,
-                                                color: hasPrevCase ? '#1e293b' : '#94a3b8',
-                                                cursor: hasPrevCase ? 'pointer' : 'not-allowed',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                            title={hasPrevCase ? 'Previous case in queue' : 'First case'}
-                                        >
-                                            <ChevronLeft size={15} /> Prev
-                                        </button>
-                                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569', padding: '0 8px' }}>
-                                            {currentCaseIndex >= 0 ? currentCaseIndex + 1 : 1} of {activeCaseList.length}
-                                        </span>
-                                        <button
-                                            onClick={handleNextCase}
-                                            disabled={!hasNextCase}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                padding: '6px 10px',
-                                                backgroundColor: hasNextCase ? '#f8fafc' : 'transparent',
-                                                border: '1px solid',
-                                                borderColor: hasNextCase ? '#cbd5e1' : 'transparent',
-                                                borderRadius: '4px',
-                                                fontSize: '12px',
-                                                fontWeight: 600,
-                                                color: hasNextCase ? '#1e293b' : '#94a3b8',
-                                                cursor: hasNextCase ? 'pointer' : 'not-allowed',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                            title={hasNextCase ? 'Next case in queue' : 'Last case'}
-                                        >
-                                            Next <ChevronRight size={15} />
-                                        </button>
-                                    </div>
-
-                                    {!selectedCase.isAssignedToMe && (
-                                        <button
-                                            onClick={(e) => handleAssignToMe(selectedCase, e)}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', fontSize: '13px', fontWeight: 600, color: '#1d4ed8', cursor: 'pointer' }}
-                                        >
-                                            <UserCheck size={16} /> Assign to Me
-                                        </button>
-                                    )}
+                                <div className="flex items-center gap-3">
                                     <button
-                                        onClick={() => setActiveTab('review-queue')}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontWeight: 600, color: '#475569', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                                        onClick={loadData}
+                                        disabled={loading}
+                                        className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 hover:bg-slate-50 font-medium px-4 py-2 text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
                                     >
-                                        <ArrowLeft size={16} /> Back to Queue
+                                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                                        Refresh Queue
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Case Switching Strip: Dropdown & Clickable Case Pills */}
-                            <div style={{
-                                backgroundColor: '#fff',
-                                borderRadius: '10px',
-                                padding: '16px 20px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                marginBottom: '24px'
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                                            Switch Case:
-                                        </span>
-                                        <select
-                                            value={selectedCase.transactionId || selectedCase.id}
-                                            onChange={(e) => {
-                                                const found = activeCaseList.find(c => (c.transactionId || c.id) === e.target.value);
-                                                if (found) handleSwitchCase(found);
-                                            }}
-                                            style={{
-                                                padding: '7px 12px',
-                                                borderRadius: '6px',
-                                                border: '1px solid #cbd5e1',
-                                                backgroundColor: '#f8fafc',
-                                                fontSize: '13px',
-                                                fontWeight: 600,
-                                                color: '#0f172a',
-                                                cursor: 'pointer',
-                                                outline: 'none',
-                                                minWidth: '320px'
-                                            }}
-                                        >
-                                            {activeCaseList.map((item, idx) => (
-                                                <option key={item.transactionId || item.id || idx} value={item.transactionId || item.id}>
-                                                    {item.queueId} • {item.customerName} — Rs. {item.amount.toLocaleString()} ({item.priority} • Risk {item.riskScore})
-                                                </option>
-                                            ))}
-                                        </select>
+                            {/* Metric Cards (KPIs) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                                {/* Total Cases */}
+                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                        Total Active Cases
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                        {activeCaseList.length} cases in review • Click any card below to switch instantly
+                                    <div className="text-2xl md:text-3xl font-extrabold text-gray-900">
+                                        {metrics.totalCases || queue.length || 0}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1 font-medium">
+                                        Pending Analyst Inspection
                                     </div>
                                 </div>
 
-                                {/* Horizontal Case Cards Strip */}
-                                <div style={{
-                                    display: 'flex',
-                                    gap: '12px',
-                                    flexWrap: 'wrap',
-                                    alignItems: 'stretch'
-                                }}>
-                                    {activeCaseList.map((item) => {
-                                        const isSelected = (item.transactionId === selectedCase.transactionId) || (item.id === selectedCase.id);
-                                        const priorityColor = item.priority === 'CRITICAL' ? '#dc2626' : item.priority === 'HIGH' ? '#d97706' : '#2563eb';
-                                        const priorityBg = item.priority === 'CRITICAL' ? '#fee2e2' : item.priority === 'HIGH' ? '#fef3c7' : '#e0f2fe';
+                                {/* Critical Priority */}
+                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                        Critical Cases (&ge;75 Risk)
+                                    </div>
+                                    <div className="text-2xl md:text-3xl font-extrabold text-red-600">
+                                        {queue.filter(q => q.priority === 'CRITICAL' || q.riskScore >= 75).length}
+                                    </div>
+                                    <div className="text-xs text-red-600 mt-1 font-medium">
+                                        Immediate Action Required
+                                    </div>
+                                </div>
 
-                                        return (
-                                            <div
-                                                key={item.transactionId || item.id}
-                                                onClick={() => handleSwitchCase(item)}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '12px',
-                                                    padding: '12px 16px',
-                                                    borderRadius: '8px',
-                                                    border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                                                    backgroundColor: isSelected ? '#eff6ff' : '#f8fafc',
-                                                    cursor: 'pointer',
-                                                    flex: '1 1 220px',
-                                                    maxWidth: '360px',
-                                                    transition: 'all 0.15s ease',
-                                                    boxShadow: isSelected ? '0 2px 6px rgba(37,99,235,0.15)' : 'none'
-                                                }}
-                                                title={`Switch to ${item.queueId} - ${item.customerName}`}
-                                            >
-                                                <div style={{
-                                                    width: '10px',
-                                                    height: '10px',
-                                                    borderRadius: '50%',
-                                                    backgroundColor: priorityColor,
-                                                    flexShrink: 0
-                                                }} />
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <span style={{ fontWeight: 800, fontSize: '13px', color: isSelected ? '#1d4ed8' : '#0f172a' }}>
-                                                            {item.queueId}
-                                                        </span>
-                                                        <span style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 700,
-                                                            padding: '2px 6px',
-                                                            borderRadius: '4px',
-                                                            backgroundColor: priorityBg,
-                                                            color: priorityColor
-                                                        }}>
-                                                            {item.priority}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {item.customerName} • Rs. {item.amount.toLocaleString()}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                {/* Assigned to Me */}
+                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                        Assigned to You
+                                    </div>
+                                    <div className="text-2xl md:text-3xl font-extrabold text-blue-600">
+                                        {queue.filter(q => q.isAssignedToMe).length}
+                                    </div>
+                                    <div className="text-xs text-blue-600 mt-1 font-medium">
+                                        Your Active Workload
+                                    </div>
+                                </div>
+
+                                {/* Average Decision Time */}
+                                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                        Avg Decision Speed
+                                    </div>
+                                    <div className="text-2xl md:text-3xl font-extrabold text-emerald-600">
+                                        {metrics.averageDecisionTimeMinutes || 4.2}m
+                                    </div>
+                                    <div className="text-xs text-emerald-600 mt-1 font-medium">
+                                        SLA Target: &lt; 10m
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* 2-Column Split: Left (2fr) & Right (1fr) */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', alignItems: 'start' }}>
+                            {/* Filter Pills Toolbar */}
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                                <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
+                                    <span className="text-xs font-semibold text-gray-500 uppercase mr-2">Filter:</span>
+                                    
+                                    <button
+                                        onClick={() => setFilterType('ALL')}
+                                        className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                            filterType === 'ALL'
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        All Cases ({queue.length})
+                                    </button>
 
-                                {/* LEFT PANEL: Transaction Details, Map, AI SHAP Signals, Audit Trail */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <button
+                                        onClick={() => setFilterType('ASSIGNED_TO_ME')}
+                                        className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                            filterType === 'ASSIGNED_TO_ME'
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        Assigned to Me ({queue.filter(q => q.isAssignedToMe).length})
+                                    </button>
 
-                                    {/* 1. Transaction Details Card */}
-                                    <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-                                            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Transaction Details</h3>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                {selectedCase.status === 'Escalated' && (
-                                                    <span style={{
-                                                        backgroundColor: '#fef3c7',
-                                                        color: '#b45309',
-                                                        padding: '4px 12px',
-                                                        borderRadius: '12px',
-                                                        fontSize: '12px',
-                                                        fontWeight: 700,
-                                                        border: '1px solid #fde68a',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px'
-                                                    }}>
-                                                        <ArrowUpRight size={14} />
-                                                        {selectedCase.isAssignedToMe
-                                                            ? `Assigned to you by ${selectedCase.escalatedByName || 'Analyst'}`
-                                                            : `Escalated to: ${selectedCase.assignedAnalystName || selectedCase.assignedAnalyst || 'Senior Analyst'}`}
-                                                    </span>
-                                                )}
-                                                <span style={{
-                                                    backgroundColor: selectedCase.status === 'Escalated' ? '#fee2e2' : '#fef3c7',
-                                                    color: selectedCase.status === 'Escalated' ? '#dc2626' : '#b45309',
-                                                    padding: '4px 12px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '11px',
-                                                    fontWeight: 700
-                                                }}>
-                                                    • {selectedCase.status.toUpperCase()}
-                                                </span>
+                                    <button
+                                        onClick={() => setFilterType('CRITICAL')}
+                                        className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                            filterType === 'CRITICAL'
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        Critical Risk ({queue.filter(q => q.priority === 'CRITICAL' || q.riskScore >= 75).length})
+                                    </button>
+
+                                    <button
+                                        onClick={() => setFilterType('DUAL')}
+                                        className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                            filterType === 'DUAL'
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        Dual Approval (&gt;Rs. 75k)
+                                    </button>
+                                </div>
+
+                                <div className="text-xs text-gray-500 font-medium">
+                                    Showing <strong className="text-gray-900">{filteredQueue.length}</strong> of {queue.length} cases
+                                </div>
+                            </div>
+
+                            {/* Data Table */}
+                            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                                <th className="px-6 py-3.5">Queue ID</th>
+                                                <th className="px-6 py-3.5">Customer / Sender</th>
+                                                <th className="px-6 py-3.5 text-right">Amount (LKR)</th>
+                                                <th className="px-6 py-3.5 text-center">Risk Score</th>
+                                                <th className="px-6 py-3.5">Priority / Status</th>
+                                                <th className="px-6 py-3.5">Assigned Staff</th>
+                                                <th className="px-6 py-3.5 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 text-sm">
+                                            {loading && queue.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                                            <span>Loading queue items...</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ) : filteredQueue.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                                                        No review cases match the selected filter.
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                filteredQueue.map((item) => (
+                                                    <tr
+                                                        key={item.id}
+                                                        onClick={() => handleOpenCase(item)}
+                                                        className="hover:bg-slate-50 border-b border-gray-100 transition-colors cursor-pointer"
+                                                    >
+                                                        {/* Queue ID */}
+                                                        <td className="px-6 py-4 font-mono font-bold text-blue-600 hover:underline">
+                                                            {item.queueId}
+                                                            <div className="text-[11px] font-normal text-gray-400">{item.txCode}</div>
+                                                        </td>
+
+                                                        {/* Customer */}
+                                                        <td className="px-6 py-4">
+                                                            <div className="font-semibold text-gray-900">{item.customerName}</div>
+                                                            <div className="text-xs text-gray-500 font-mono">{item.customerId}</div>
+                                                        </td>
+
+                                                        {/* Amount */}
+                                                        <td className="px-6 py-4 text-right font-bold text-gray-900">
+                                                            Rs. {Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </td>
+
+                                                        {/* Risk Score Visual */}
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <span className="font-bold text-xs text-gray-900 w-8 text-right">
+                                                                    {item.riskScore}
+                                                                </span>
+                                                                <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden shrink-0">
+                                                                    <div
+                                                                        className={`h-full ${getScoreBarFillColor(item.riskScore)}`}
+                                                                        style={{ width: `${Math.min(100, item.riskScore)}%` }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Priority / Status */}
+                                                        <td className="px-6 py-4">
+                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1 ${
+                                                                item.priority === 'CRITICAL' ? 'bg-red-50 text-red-600' :
+                                                                item.priority === 'HIGH' ? 'bg-amber-50 text-amber-700' :
+                                                                'bg-blue-50 text-blue-600'
+                                                            }`}>
+                                                                {item.priority}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Assigned */}
+                                                        <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                                                            {item.assignedAnalyst}
+                                                        </td>
+
+                                                        {/* Actions */}
+                                                        <td className="px-6 py-4 text-right">
+                                                            <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                                                                <button
+                                                                    onClick={() => handleOpenCase(item)}
+                                                                    className="bg-blue-600 text-white hover:bg-blue-700 font-medium px-3 py-1.5 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
+                                                                >
+                                                                    Open Case
+                                                                </button>
+                                                                {!item.isAssignedToMe && (
+                                                                    <button
+                                                                        onClick={(e) => handleAssignToMe(item, e)}
+                                                                        className="border border-blue-600 text-blue-600 hover:bg-blue-50 font-medium px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer"
+                                                                    >
+                                                                        + Assign to Me
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* VIEW: CASE DETAIL */}
+                    {activeTab === 'case-detail' && selectedCase && (
+                        <div className="space-y-6">
+
+                            {/* Header & Case Title */}
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div>
+                                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                                        Platform &gt; Case Detail Inspection
+                                    </div>
+                                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+                                        <span>Case {selectedCase.queueId}</span>
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                            selectedCase.priority === 'CRITICAL' ? 'bg-red-50 text-red-600' :
+                                            selectedCase.priority === 'HIGH' ? 'bg-amber-50 text-amber-700' :
+                                            'bg-blue-50 text-blue-600'
+                                        }`}>
+                                            {selectedCase.priority}
+                                        </span>
+                                    </h1>
+                                </div>
+
+                                {/* Prev / Next Case Navigation */}
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handlePrevCase}
+                                        disabled={!hasPrevCase}
+                                        className="flex items-center gap-1 bg-white border border-gray-200 text-gray-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium px-3 py-1.5 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" /> Prev
+                                    </button>
+                                    <button
+                                        onClick={handleNextCase}
+                                        disabled={!hasNextCase}
+                                        className="flex items-center gap-1 bg-white border border-gray-200 text-gray-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium px-3 py-1.5 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
+                                    >
+                                        Next <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('review-queue')}
+                                        className="bg-white border border-gray-200 text-gray-700 hover:bg-slate-50 font-medium px-3 py-1.5 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
+                                    >
+                                        Back to Queue
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Main Case Inspector Layout (2 Columns) */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                                {/* Left Column: Case Forensics & Telemetry (2 cols) */}
+                                <div className="lg:col-span-2 space-y-6">
+
+                                    {/* Primary Financial Overview Card */}
+                                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                                        <div className="flex justify-between items-start border-b border-gray-100 pb-4">
+                                            <div>
+                                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Transaction Amount</div>
+                                                <div className="text-3xl font-extrabold text-gray-900 mt-1">
+                                                    Rs. {Number(selectedCase.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Risk Score</div>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-2xl font-bold text-gray-900">{selectedCase.riskScore}/100</span>
+                                                    <div className="w-16 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                                        <div className={`h-full ${getScoreBarFillColor(selectedCase.riskScore)}`} style={{ width: `${selectedCase.riskScore}%` }} />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Escalation Context Banner */}
-                                        {selectedCase.status === 'Escalated' && (
-                                            <div style={{
-                                                marginBottom: '20px',
-                                                padding: '12px 16px',
-                                                backgroundColor: '#fffbeb',
-                                                border: '1px solid #fde68a',
-                                                borderRadius: '8px',
-                                                display: 'flex',
-                                                alignItems: 'flex-start',
-                                                gap: '12px',
-                                                fontSize: '13px'
-                                            }}>
-                                                <ArrowUpRight size={18} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ fontWeight: 700, color: '#92400e', marginBottom: '2px' }}>
-                                                        {selectedCase.isAssignedToMe
-                                                            ? `Case Assigned to You by ${selectedCase.escalatedByName || 'Senior Analyst'}`
-                                                            : `Case Escalated to: ${selectedCase.assignedAnalystName || selectedCase.assignedAnalyst || 'Senior Analyst'}`}
-                                                    </div>
-                                                    <div style={{ color: '#78350f', fontSize: '12px' }}>
-                                                        <span style={{ fontWeight: 600 }}>Escalation Reason: </span>
-                                                        {selectedCase.escalationReason || 'Senior investigation requested for elevated fraud indicators.'}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '18px', fontSize: '13px' }}>
+                                        <div className="grid grid-cols-2 gap-4 text-xs">
                                             <div>
-                                                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Transaction ID</div>
-                                                <div style={{ fontWeight: 700, color: '#0f172a', marginTop: '3px' }}>{selectedCase.txCode}</div>
+                                                <span className="text-gray-500 font-medium block">Sender / Customer:</span>
+                                                <strong className="text-gray-900 text-sm">{selectedCase.customerName}</strong> ({selectedCase.customerId})
                                             </div>
                                             <div>
-                                                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Queue ID</div>
-                                                <div style={{ fontWeight: 700, color: '#2563eb', marginTop: '3px' }}>{selectedCase.queueId}</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Customer (Sender)</div>
-                                                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: '3px' }}>{selectedCase.customerName} ({selectedCase.customerId})</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Recipient</div>
-                                                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: '3px' }}>{selectedCase.recipientName}</div>
-                                            </div>
-                                            <div>
-                                                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Amount</div>
-                                                <div style={{ fontWeight: 800, color: '#0f172a', marginTop: '3px', fontSize: '16px' }}>
-                                                    Rs. {selectedCase.amount.toLocaleString()} LKR
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.4px' }}>Origin IP & Device</div>
-                                                <div style={{ fontWeight: 500, color: '#334155', marginTop: '3px' }}>
-                                                    {selectedCase.originIp} — {selectedCase.device}
-                                                </div>
+                                                <span className="text-gray-500 font-medium block">Beneficiary:</span>
+                                                <strong className="text-gray-900 text-sm">{selectedCase.recipientName}</strong>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* 2. Geolocation Anomaly Card */}
-                                    <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                                            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
-                                                Geolocation Anomaly — Transaction vs Historical Login
-                                            </h3>
-                                            <span style={{ fontSize: '11px', fontWeight: 700, backgroundColor: '#fee2e2', color: '#dc2626', padding: '3px 10px', borderRadius: '4px' }}>
-                                                Distance Delta: 12.4 km
-                                            </span>
-                                        </div>
-
-                                        <TransactionMap
-                                            lat={selectedCase.latitude}
-                                            lng={selectedCase.longitude}
-                                            locationName={`Transaction Origin: ${selectedCase.originIp} (Lat: ${selectedCase.latitude}, Lng: ${selectedCase.longitude})`}
-                                        />
-                                    </div>
-
-                                    {/* 3. AI Risk Assessment & SHAP Attributions */}
-                                    <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                        <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
-                                            AI Risk Assessment & SHAP Attributions
+                                    {/* Risk Signal Drivers */}
+                                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
+                                            AI Risk Signal Drivers
                                         </h3>
-
-                                        <div style={{ backgroundColor: '#f8fafc', borderLeft: '4px solid #2563eb', padding: '14px 16px', fontSize: '13px', color: '#334155', fontStyle: 'italic', marginBottom: '20px', lineHeight: 1.5 }}>
-                                            "This transfer was held because the amount is 3× the customer's 30-day average, the initiating device has not been seen before, and the origin IP resolves to a location outside the user's verified home cluster."
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                            {selectedCase.flagReasons.map((fr, idx) => (
-                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '8px 12px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-                                                    <span style={{ color: '#334155', fontWeight: 500 }}>{fr.label}</span>
-                                                    <span style={{ fontWeight: 800, color: fr.color || '#dc2626', backgroundColor: '#fff', padding: '2px 8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                                                        {fr.impact}
+                                        <div className="space-y-2.5">
+                                            {selectedCase.flagReasons.map((flag, idx) => (
+                                                <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-gray-100 text-xs">
+                                                    <span className="font-semibold text-gray-800">{flag.label}</span>
+                                                    <span className="font-extrabold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                                                        {flag.impact} pts
                                                     </span>
                                                 </div>
                                             ))}
                                         </div>
-
-                                        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>Composite Risk Score</span>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{ fontSize: '24px', fontWeight: 800, color: selectedCase.riskScore > 75 ? '#dc2626' : '#d97706' }}>
-                                                    {selectedCase.riskScore}
-                                                </span>
-                                                <span style={{ color: '#64748b', fontSize: '14px' }}>/ 100</span>
-                                            </div>
-                                        </div>
                                     </div>
 
-                                    {/* 4. Decision History & Audit Trail (User Story 4 - Admin Audit Trail) */}
-                                    <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                                            <History size={18} color="#2563eb" />
-                                            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
-                                                Decision History & Audit Trail
-                                            </h3>
+                                    {/* Device & Location Telemetry Map */}
+                                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                            Geolocation &amp; Device Telemetry
+                                        </h3>
+                                        <div className="grid grid-cols-2 gap-4 text-xs">
+                                            <div>
+                                                <span className="text-gray-500 font-medium">Origin IP Address:</span>
+                                                <div className="font-mono font-bold text-blue-600">{selectedCase.originIp}</div>
+                                            </div>
+                                            <div>
+                                                <span className="text-gray-500 font-medium">Device Fingerprint:</span>
+                                                <div className="font-medium text-gray-900">{selectedCase.device}</div>
+                                            </div>
                                         </div>
-
-                                        {caseHistory.length === 0 ? (
-                                            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-                                                No previous decisions logged for this case. You are the initial reviewer.
-                                            </div>
-                                        ) : (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                                {caseHistory.map((item, idx) => (
-                                                    <div key={idx} style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', borderLeft: `4px solid ${item.decision.toLowerCase() === 'approved' ? '#16a34a' : item.decision.toLowerCase() === 'rejected' ? '#dc2626' : '#2563eb'}` }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                                            <span style={{
-                                                                fontWeight: 700, fontSize: '12px', padding: '2px 8px', borderRadius: '4px',
-                                                                backgroundColor: item.decision.toLowerCase() === 'approved' ? '#dcfce7' : item.decision.toLowerCase() === 'rejected' ? '#fee2e2' : '#e0f2fe',
-                                                                color: item.decision.toLowerCase() === 'approved' ? '#166534' : item.decision.toLowerCase() === 'rejected' ? '#991b1b' : '#0369a1'
-                                                            }}>
-                                                                {item.decision.toUpperCase()} (Level {item.approvalLevel})
-                                                            </span>
-                                                            <span style={{ fontSize: '11px', color: '#64748b' }}>
-                                                                {new Date(item.decidedAt).toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', color: '#475569', marginBottom: '4px' }}>
-                                                            <strong>Analyst:</strong> {item.analystName ? `${item.analystName} (${item.analystEmpId || (item.analystId && !item.analystId.includes('-') ? item.analystId : 'ANL-001')})` : (item.analystEmpId || (item.analystId && !item.analystId.includes('-') ? item.analystId : 'ANL-001'))}
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', color: '#334155', fontStyle: 'italic' }}>
-                                                            "{item.notes || 'No review notes entered.'}"
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                        <div className="h-48 rounded-lg overflow-hidden border border-gray-200">
+                                            <TransactionMap latitude={selectedCase.latitude} longitude={selectedCase.longitude} />
+                                        </div>
                                     </div>
 
                                 </div>
 
-                                {/* RIGHT PANEL: Dual Approval, Analyst Controls, Summary */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                {/* Right Column: Analyst Decision Terminal */}
+                                <div className="space-y-6">
 
-                                    {/* Dual Approval Warning Banner */}
-                                    {selectedCase.requiresDualApproval && (
-                                        <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                                                <AlertTriangle size={22} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                                <div>
-                                                    <div style={{ fontWeight: 700, color: '#92400e', fontSize: '14px' }}>Dual Approval Required</div>
-                                                    <div style={{ color: '#b45309', fontSize: '12px', marginTop: '6px', lineHeight: 1.5 }}>
-                                                        Amount exceeds Rs. 75,000 statutory threshold. Secondary approval (Maker-Checker principle) is required before funds are released.
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+                                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                            Analyst Decision Console
+                                        </h3>
 
-                                    {/* Analyst Decision Actions Form (User Story 2 & 3) */}
-                                    <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                        <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Analyst Notes & Justification</h3>
-                                        <div style={{ fontSize: '12px', color: '#dc2626', marginBottom: '10px', fontWeight: 600 }}>
-                                            * Required before submitting decision
+                                        {/* Mandatory Analyst Notes Input */}
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">
+                                                Review Rationale &amp; Notes <span className="text-red-500">*</span>
+                                            </label>
+                                            <textarea
+                                                rows={4}
+                                                value={notes}
+                                                onChange={(e) => setNotes(e.target.value)}
+                                                placeholder="Enter mandatory compliance notes and rationale before submitting decision..."
+                                                className="w-full p-3 bg-slate-50 border border-gray-200 rounded-lg text-xs text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-gray-400"
+                                            />
                                         </div>
 
-                                        <textarea
-                                            rows={4}
-                                            value={notes}
-                                            onChange={(e) => setNotes(e.target.value)}
-                                            placeholder="Record findings, customer communication, or justification..."
-                                            style={{
-                                                width: '100%',
-                                                boxSizing: 'border-box',
-                                                borderRadius: '6px',
-                                                border: '1px solid #cbd5e1',
-                                                padding: '12px',
-                                                fontSize: '13px',
-                                                fontFamily: 'inherit',
-                                                resize: 'vertical',
-                                                outline: 'none',
-                                                transition: 'border-color 0.15s ease'
-                                            }}
-                                            onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                                            onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
-                                        />
-
-                                        {/* Action Buttons: Approve, Reject, Request Info, Escalate */}
-                                        <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        {/* Decision Action Buttons */}
+                                        <div className="space-y-2">
                                             <button
                                                 onClick={() => handleDecision('Approved')}
-                                                style={{
-                                                    backgroundColor: '#16a34a',
-                                                    color: '#fff',
-                                                    padding: '12px',
-                                                    borderRadius: '6px',
-                                                    border: 'none',
-                                                    fontWeight: 700,
-                                                    fontSize: '13px',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                    boxShadow: '0 2px 4px rgba(22,163,74,0.3)',
-                                                    transition: 'all 0.15s ease'
-                                                }}
+                                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
                                             >
-                                                <CheckCircle size={17} /> {selectedCase.status === 'PendingSecondApproval' ? 'Confirm Second Approval (Level 2) & Release Funds' : 'Approve & Release Funds'}
+                                                Approve Transaction
                                             </button>
 
                                             <button
                                                 onClick={() => handleDecision('Rejected')}
-                                                style={{
-                                                    backgroundColor: '#dc2626',
-                                                    color: '#fff',
-                                                    padding: '12px',
-                                                    borderRadius: '6px',
-                                                    border: 'none',
-                                                    fontWeight: 700,
-                                                    fontSize: '13px',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                    boxShadow: '0 2px 4px rgba(220,38,38,0.3)',
-                                                    transition: 'all 0.15s ease'
-                                                }}
+                                                className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-4 text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
                                             >
-                                                <XCircle size={17} /> Reject & Lock Transaction
+                                                Reject &amp; Block Transaction
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleDecision('Escalate')}
+                                                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 px-4 text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
+                                            >
+                                                Escalate to Senior Analyst
                                             </button>
 
                                             <button
                                                 onClick={() => handleDecision('Request More Info')}
-                                                style={{
-                                                    backgroundColor: '#0284c7',
-                                                    color: '#fff',
-                                                    padding: '12px',
-                                                    borderRadius: '6px',
-                                                    border: 'none',
-                                                    fontWeight: 700,
-                                                    fontSize: '13px',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                    boxShadow: '0 2px 4px rgba(2,132,199,0.3)',
-                                                    transition: 'all 0.15s ease'
-                                                }}
+                                                className="w-full border border-gray-300 bg-white hover:bg-slate-50 text-gray-700 font-semibold py-2.5 px-4 text-xs rounded-lg transition-colors cursor-pointer"
                                             >
-                                                <HelpCircle size={17} /> Request More Information
+                                                Request Information
                                             </button>
-
-                                            <button
-                                                onClick={handleOpenEscalateModal}
-                                                style={{
-                                                    backgroundColor: '#fffbeb',
-                                                    color: '#b45309',
-                                                    padding: '12px',
-                                                    borderRadius: '6px',
-                                                    border: '1px solid #fde68a',
-                                                    fontWeight: 700,
-                                                    fontSize: '13px',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '8px',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                            >
-                                                <ArrowUpRight size={17} /> Escalate Case
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Case Summary Widget */}
-                                    <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0', fontSize: '13px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                                        <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Case Summary</h4>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                            <span style={{ color: '#64748b' }}>Case ID</span>
-                                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{selectedCase.queueId}</span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                            <span style={{ color: '#64748b' }}>Priority</span>
-                                            <span style={{
-                                                fontWeight: 800,
-                                                color: selectedCase.priority === 'CRITICAL' ? '#dc2626' : (selectedCase.priority === 'HIGH' ? '#d97706' : '#2563eb')
-                                            }}>
-                                                {selectedCase.priority}
-                                            </span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                            <span style={{ color: '#64748b' }}>Assigned To</span>
-                                            <span style={{
-                                                fontWeight: 700,
-                                                color: selectedCase.status === 'Escalated' ? '#d97706' : '#0f172a',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px'
-                                            }}>
-                                                {selectedCase.status === 'Escalated'
-                                                    ? (selectedCase.isAssignedToMe
-                                                        ? `Assigned to you by ${selectedCase.escalatedByName || 'Analyst'}`
-                                                        : `Escalated to: ${selectedCase.assignedAnalystName || selectedCase.assignedAnalyst || 'Senior Analyst'}`)
-                                                    : (selectedCase.assignedAnalyst || 'Unassigned')}
-                                            </span>
-                                        </div>
-                                        {selectedCase.status === 'Escalated' && selectedCase.escalationReason && (
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                                <span style={{ color: '#64748b' }}>Escalation Reason</span>
-                                                <span style={{ fontWeight: 600, color: '#b45309', fontSize: '12px', textAlign: 'right', maxWidth: '200px' }}>
-                                                    {selectedCase.escalationReason}
-                                                </span>
-                                            </div>
-                                        )}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                            <span style={{ color: '#64748b' }}>Elapsed</span>
-                                            <span style={{ fontWeight: 600, color: '#0f172a' }}>{calculateElapsed(selectedCase.createdAt)}</span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                                            <span style={{ color: '#64748b' }}>Status</span>
-                                            <span style={{ fontWeight: 700, color: selectedCase.status === 'Escalated' ? '#dc2626' : '#2563eb' }}>
-                                                {selectedCase.status}
-                                            </span>
                                         </div>
                                     </div>
 
@@ -1691,42 +1194,9 @@ export default function AnalystReviewPage() {
                         </div>
                     )}
 
-                    {/* ============================================================== */}
-                    {/* TAB: ANALYTICS & ADMIN PERFORMANCE (Deliverable 7)             */}
-                    {/* ============================================================== */}
-                    {activeTab === 'analytics' && (
-                        <AnalystPerformanceDashboard
-                            metrics={metrics}
-                            queue={queue}
-                        />
-                    )}
-
-                    {/* ============================================================== */}
-                    {/* TAB: AUDIT TRAILS & FULL HISTORY (Deliverable 8)               */}
-                    {/* ============================================================== */}
-                    {activeTab === 'audit-logs' && (
-                        <DecisionHistoryTable
-                            fetchLive={true}
-                            queue={queue}
-                            onRefresh={loadData}
-                            onOpenCase={handleOpenCase}
-                        />
-                    )}
-
-                    {/* ============================================================== */}
-                    {/* TAB: TRANSACTION MONITOR & REVERSALS (Admin Ledger)             */}
-                    {/* ============================================================== */}
-                    {activeTab === 'transaction-monitor' && (
-                        <TransactionMonitoringDashboard />
-                    )}
-
-                    {activeTab === 'reversals' && (
-                        <FinancialReversalsPage />
-                    )}
-
-                    {/* ============================================================== */}
-                    {/* TAB: FRAUD FLAGS LIST (Component Deliverable 2)                */}
-                    {/* ============================================================== */}
+                    {/* OTHER TAB VIEWS */}
+                    {activeTab === 'analytics' && <AnalystPerformanceDashboard />}
+                    {activeTab === 'audit-logs' && <DecisionHistoryTable fetchLive={true} />}
                     {activeTab === 'fraud-flags' && (
                         <FraudFlagList
                             onSelectFlag={(flag) => {
@@ -1737,281 +1207,75 @@ export default function AnalystReviewPage() {
                             onOpenRules={() => setActiveTab('fraud-rules')}
                         />
                     )}
-
-                    {/* ============================================================== */}
-                    {/* TAB: FLAG DETAIL / SCORE BREAKDOWN (Component Deliverable 3)   */}
-                    {/* ============================================================== */}
                     {activeTab === 'flag-detail' && (
                         <FlagDetailBreakdown
                             flag={selectedFraudFlag}
                             onBack={() => setActiveTab('fraud-flags')}
-                            onNavigateToCase={async (caseId, flagData) => {
-                                const target = caseId || flagData?.queueId || flagData?.transactionId || flagData?.rawTxId;
-                                const src = flagData || selectedFraudFlag || {};
-
-                                // 1. Check in loaded queue
-                                const found = queue.find(q => 
-                                    q.queueId === target || 
-                                    q.transactionId === target || 
-                                    q.queueCode === target ||
-                                    q.txCode === target ||
-                                    String(q.id) === String(target) ||
-                                    (src.transactionId && q.transactionId === src.transactionId) ||
-                                    (src.queueId && q.queueId === src.queueId)
-                                );
-
-                                if (found) {
-                                    handleOpenCase(found);
-                                    return;
-                                }
-
-                                // 2. Query backend database directly
-                                try {
-                                    if (target) {
-                                        const res = await reviewService.getCaseById(target);
-                                        const rawItem = res.item || res;
-                                        if (rawItem && (rawItem.transactionId || rawItem.queueCode)) {
-                                            const normalized = normalizeCase(rawItem, queue.length);
-                                            handleOpenCase(normalized);
-                                            return;
-                                        }
-                                    }
-                                } catch (err) {
-                                    console.warn("Direct case DB lookup failed, falling back to flag data:", err);
-                                }
-
-                                // 3. Build synthetic high-fidelity case from flag so user is directly taken to Case Detail!
-                                const syntheticCase = normalizeCase({
-                                    id: src.id || target || `case-${Date.now()}`,
-                                    transactionId: src.transactionId || target || `tx-${Date.now()}`,
-                                    queueCode: src.queueId || src.rawTxId || target || 'Q-104',
-                                    amount: Number(src.amount) || 75000,
-                                    senderName: src.customerName || src.senderName || 'Verified Sender',
-                                    senderId: src.customerId || src.senderId || 'USR-4421',
-                                    recipientName: src.recipientName || 'Verified Beneficiary',
-                                    recipientId: src.recipientId || 'USR-2187',
-                                    riskScore: Number(src.riskScore) || 85,
-                                    originIp: src.originIp || '203.143.88.71',
-                                    device: src.device || 'Pixel 7 — Android 14',
-                                    latitude: src.latitude || 6.9319,
-                                    longitude: src.longitude || 79.8478,
-                                    status: src.status || 'Under Review',
-                                    flagReasonsJson: src.triggeredRules ? JSON.stringify(src.triggeredRules) : src.flagReasonsJson,
-                                    createdAt: src.timestamp || new Date().toISOString()
-                                }, queue.length);
-
-                                handleOpenCase(syntheticCase);
+                            onNavigateToCase={(caseId) => {
+                                setActiveTab('case-detail');
                             }}
                         />
                     )}
-
-                    {/* ============================================================== */}
-                    {/* TAB: RULE CONFIGURATION PANEL (Component Deliverable 1)        */}
-                    {/* ============================================================== */}
-                    {activeTab === 'fraud-rules' && (
-                        <RuleConfigurationPanel
-                            onRuleChanged={() => {
-                                loadData();
-                            }}
-                        />
-                    )}
-
-                    {/* ============================================================== */}
-                    {/* TAB: FLAGGING TRENDS DASHBOARD (Component Deliverable 4)       */}
-                    {/* ============================================================== */}
+                    {activeTab === 'fraud-rules' && <RuleConfigurationPanel />}
                     {activeTab === 'fraud-trends' && (
                         <FlaggingTrendsDashboard
                             onNavigateToRules={() => setActiveTab('fraud-rules')}
                             onNavigateToFlags={() => setActiveTab('fraud-flags')}
                         />
                     )}
+                    {activeTab === 'transaction-monitor' && <TransactionMonitoringDashboard />}
+                    {activeTab === 'reversals' && <FinancialReversalsPage />}
 
                 </div>
             </main>
 
-            {/* ============================================================== */}
-            {/* ESCALATE CASE MODAL (Deliverable: Select Available Analyst)      */}
-            {/* ============================================================== */}
+            {/* Escalation Modal */}
             {isEscalateModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.7)',
-                    backdropFilter: 'blur(5px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999,
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '12px',
-                        width: '100%',
-                        maxWidth: '520px',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
-                        border: '1px solid #cbd5e1',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Modal Header */}
-                        <div style={{
-                            padding: '20px 24px',
-                            borderBottom: '1px solid #e2e8f0',
-                            backgroundColor: '#f8fafc',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '8px',
-                                    backgroundColor: '#fef3c7',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#d97706'
-                                }}>
-                                    <ArrowUpRight size={20} />
-                                </div>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                        Escalate Case
-                                    </h3>
-                                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                                        Case: <strong style={{ color: '#2563eb' }}>{selectedCase?.queueId}</strong> • Amount: <strong>Rs. {Number(selectedCase?.amount || 0).toLocaleString()}</strong>
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setIsEscalateModalOpen(false)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '18px', padding: '4px' }}
-                            >
-                                ✕
-                            </button>
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-lg w-full overflow-hidden">
+                        <div className="p-6 bg-slate-900 text-white border-b border-slate-800">
+                            <h3 className="text-lg font-bold">Escalate Case to Senior Analyst</h3>
+                            <p className="text-xs text-slate-400 mt-1">Select recipient analyst and state clear escalation rationale.</p>
                         </div>
-
-                        {/* Modal Body */}
-                        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        <div className="p-6 space-y-4">
                             <div>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                                    Select Analyst:
-                                </label>
-                                {isLoadingAnalysts ? (
-                                    <div style={{ padding: '12px', fontSize: '13px', color: '#64748b', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <RefreshCw size={14} className="animate-spin" /> Querying eligible staff from database...
-                                    </div>
-                                ) : availableAnalysts.length === 0 ? (
-                                    <div style={{ padding: '12px', fontSize: '13px', color: '#ef4444', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fee2e2' }}>
-                                        No eligible analysts or administrators found in database.
-                                    </div>
-                                ) : (
-                                    <select
-                                        value={selectedTargetAnalystId}
-                                        onChange={(e) => setSelectedTargetAnalystId(e.target.value)}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            borderRadius: '8px',
-                                            border: '1px solid #cbd5e1',
-                                            fontSize: '13px',
-                                            fontWeight: 600,
-                                            color: '#0f172a',
-                                            backgroundColor: '#fff',
-                                            outline: 'none',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        {availableAnalysts.map((a) => {
-                                            const isSelf = String(a.id).toLowerCase() === String(currentAnalystId).toLowerCase();
-                                            const roleDetail = a.jobTitle || a.role || 'Analyst';
-                                            const empCode = a.employeeId || (a.role === 'Admin' ? 'ADM-001' : 'ANL-001');
-                                            return (
-                                                <option key={a.id} value={a.id}>
-                                                    {a.name} ({roleDetail} • {empCode}){isSelf ? ' — (You)' : ''}
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
-                                )}
-                                <span style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#64748b' }}>
-                                    Dynamic database retrieval based on PostgreSQL staff identity and role permissions.
-                                </span>
+                                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Target Staff Member</label>
+                                <select
+                                    value={selectedTargetAnalystId}
+                                    onChange={(e) => setSelectedTargetAnalystId(e.target.value)}
+                                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                                >
+                                    {availableAnalysts.map(a => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.name} ({a.role})
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
-
                             <div>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                                    Escalation Reason / Notes:
-                                </label>
+                                <label className="block text-xs font-semibold text-gray-700 uppercase mb-2">Escalation Rationale</label>
                                 <textarea
                                     rows={3}
                                     value={escalationNotes}
                                     onChange={(e) => setEscalationNotes(e.target.value)}
-                                    placeholder="Enter reason for escalating this case to the selected analyst..."
-                                    style={{
-                                        width: '100%',
-                                        boxSizing: 'border-box',
-                                        padding: '10px 14px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #cbd5e1',
-                                        fontSize: '13px',
-                                        fontFamily: 'inherit',
-                                        resize: 'vertical',
-                                        outline: 'none'
-                                    }}
+                                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="State rationale..."
                                 />
                             </div>
                         </div>
-
-                        {/* Modal Footer Actions */}
-                        <div style={{
-                            padding: '16px 24px',
-                            borderTop: '1px solid #e2e8f0',
-                            backgroundColor: '#f8fafc',
-                            display: 'flex',
-                            justifyContent: 'flex-end',
-                            gap: '12px'
-                        }}>
+                        <div className="p-4 bg-slate-50 border-t border-gray-200 flex justify-end gap-2">
                             <button
                                 onClick={() => setIsEscalateModalOpen(false)}
-                                disabled={isSubmittingEscalation}
-                                style={{
-                                    padding: '9px 18px',
-                                    borderRadius: '6px',
-                                    border: '1px solid #cbd5e1',
-                                    backgroundColor: '#ffffff',
-                                    color: '#475569',
-                                    fontWeight: 600,
-                                    fontSize: '13px',
-                                    cursor: 'pointer'
-                                }}
+                                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-slate-100 cursor-pointer"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleConfirmEscalation}
-                                disabled={isSubmittingEscalation || !selectedTargetAnalystId}
-                                style={{
-                                    padding: '9px 22px',
-                                    borderRadius: '6px',
-                                    border: 'none',
-                                    backgroundColor: '#d97706',
-                                    color: '#ffffff',
-                                    fontWeight: 700,
-                                    fontSize: '13px',
-                                    cursor: isSubmittingEscalation || !selectedTargetAnalystId ? 'not-allowed' : 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    boxShadow: '0 2px 4px rgba(217, 119, 6, 0.3)'
-                                }}
+                                disabled={isSubmittingEscalation}
+                                className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 cursor-pointer"
                             >
-                                <ArrowUpRight size={16} />
-                                {isSubmittingEscalation ? 'Escalating...' : 'Escalate'}
+                                {isSubmittingEscalation ? 'Submitting...' : 'Confirm Escalation'}
                             </button>
                         </div>
                     </div>

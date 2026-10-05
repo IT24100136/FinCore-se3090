@@ -7,13 +7,8 @@ import {
   CheckCircle2,
   ShieldAlert,
   ArrowRight,
-  User,
   CreditCard,
-  Calendar,
-  Lock,
-  FileText,
   Clock,
-  ExternalLink,
   RefreshCw
 } from 'lucide-react';
 
@@ -30,7 +25,6 @@ export default function FinancialReversalsPage() {
   const [reversalSuccessResult, setReversalSuccessResult] = useState(null);
   const [actionError, setActionError] = useState(null);
 
-  // Fetch recent completed/fraud-confirmed transactions for quick select
   const fetchRecent = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -114,7 +108,6 @@ export default function FinancialReversalsPage() {
         throw new Error(data.message || 'Ledger reversal failed.');
       }
 
-      // Success! Update selected transaction state
       setReversalSuccessResult(data);
       setSelectedTx(prev => prev ? {
         ...prev,
@@ -135,102 +128,58 @@ export default function FinancialReversalsPage() {
   const isReversible = selectedTx && (selectedTx.status === 'Completed' || selectedTx.status === 'FraudConfirmed');
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#090d16', color: '#f8fafc', padding: '2rem' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8 font-sans text-gray-900">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Navigation Breadcrumb & Header */}
-        <div style={{ marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#64748b', marginBottom: '8px' }}>
-            <span>FINANCIAL CORE & LEDGER</span>
-            <span>&gt;</span>
-            <span style={{ color: '#38bdf8', fontWeight: 600 }}>FINANCIAL REVERSAL ACTION</span>
-            <span style={{
-              marginLeft: '8px',
-              padding: '2px 8px',
-              backgroundColor: 'rgba(239, 68, 68, 0.15)',
-              color: '#f87171',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700
-            }}>
-              ADMIN PRIVILEGE ONLY
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#f87171'
-                }}>
-                  <RotateCcw size={20} />
-                </div>
-                Financial Ledger Reversal Console
-              </h1>
-              <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: '6px', maxWidth: '780px', lineHeight: 1.5 }}>
-                Execute authoritative ledger claw-backs and balance refunds for fraudulent or disputed transactions.
-                All reversals atomically debit recipient accounts, credit original sender accounts, generate corresponding
-                reversal ledger entries, and record an immutable event in the institutional Audit Log.
-              </p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span>FINANCIAL CORE &amp; LEDGER</span>
+              <span>&gt;</span>
+              <span className="text-blue-600 font-bold">REVERSAL ACTION</span>
+              <span className="bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded text-[10px] font-extrabold">
+                ADMIN PRIVILEGE
+              </span>
             </div>
 
-            <button
-              onClick={fetchRecent}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 16px',
-                backgroundColor: '#1e293b',
-                color: '#94a3b8',
-                border: '1px solid #334155',
-                borderRadius: '8px',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <RefreshCw size={14} /> Refresh Quick List
-            </button>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-600">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              Financial Ledger Reversal Console
+            </h1>
+            <p className="text-gray-500 text-xs mt-1 max-w-3xl">
+              Execute authoritative ledger claw-backs and balance refunds for fraudulent or disputed transactions.
+              All reversals debit recipient accounts, credit original senders, and record an immutable event in the Audit Log.
+            </p>
           </div>
+
+          <button
+            onClick={fetchRecent}
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-slate-50 cursor-pointer shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh List
+          </button>
         </div>
 
         {/* Success Alert Banner */}
         {reversalSuccessResult && (
-          <div style={{
-            marginBottom: '1.5rem',
-            padding: '16px 20px',
-            backgroundColor: 'rgba(16, 185, 129, 0.12)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '14px'
-          }}>
-            <CheckCircle2 size={24} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '1rem', fontWeight: 700, color: '#34d399', marginBottom: '4px' }}>
-                Ledger Reversal Successfully Executed & Audited
+          <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-start gap-3 shadow-sm">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="flex-1 text-xs">
+              <div className="font-bold text-sm text-emerald-900 mb-1">
+                Ledger Reversal Successfully Executed
               </div>
-              <div style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                Original Transaction <strong>{reversalSuccessResult.referenceId}</strong> has been set to <strong>Reversed</strong>.
-                Claw-back amount of <strong>Rs. {reversalSuccessResult.refundedAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> has been refunded to sender.
-                Core Reversal Transaction Reference: <strong style={{ color: '#38bdf8' }}>{reversalSuccessResult.reversalReferenceId}</strong>.
-                Immutable Audit Trail logged under operator <strong>{reversalSuccessResult.reversedBy}</strong>.
+              <div>
+                Original Transaction <strong>{reversalSuccessResult.referenceId}</strong> set to <strong>Reversed</strong>.
+                Refunded <strong>Rs. {reversalSuccessResult.refundedAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> to sender.
+                Reversal Reference: <strong className="text-blue-600">{reversalSuccessResult.reversalReferenceId}</strong>.
               </div>
             </div>
             <button
               onClick={() => setReversalSuccessResult(null)}
-              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '16px' }}
+              className="text-gray-400 hover:text-gray-600 font-bold"
             >
               ✕
             </button>
@@ -238,72 +187,34 @@ export default function FinancialReversalsPage() {
         )}
 
         {/* Search & Lookup Section */}
-        <div style={{
-          backgroundColor: '#0f172a',
-          borderRadius: '14px',
-          border: '1px solid #1e293b',
-          padding: '24px',
-          marginBottom: '2rem'
-        }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', margin: '0 0 12px 0' }}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Lookup Transaction by ID or Reference
           </h2>
           <form
             onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
-            style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}
+            className="flex flex-col sm:flex-row gap-3"
           >
-            <div style={{
-              flex: 1,
-              minWidth: '280px',
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <Search size={18} color="#64748b" style={{ position: 'absolute', left: '14px' }} />
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
               <input
                 type="text"
-                placeholder="Enter Transaction ID (e.g. TXN-1002, TXN-a49b2c..., or numeric ID)"
+                placeholder="Enter Transaction ID (e.g. TXN-1002, TXN-a49b2c...)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 14px 12px 42px',
-                  backgroundColor: '#070c18',
-                  border: '1px solid #334155',
-                  borderRadius: '10px',
-                  color: '#f8fafc',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  transition: 'border-color 0.15s ease'
-                }}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-gray-400"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 24px',
-                backgroundColor: '#2563eb',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '10px',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease'
-              }}
+              className="flex items-center justify-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             >
               {loading ? (
-                <>
-                  <div style={{ width: '16px', height: '16px', border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                  <span>Searching...</span>
-                </>
+                <span>Searching...</span>
               ) : (
                 <>
-                  <Search size={16} />
+                  <Search className="w-3.5 h-3.5" />
                   <span>Lookup Transaction</span>
                 </>
               )}
@@ -311,30 +222,19 @@ export default function FinancialReversalsPage() {
           </form>
 
           {searchError && (
-            <div style={{
-              marginTop: '16px',
-              padding: '12px 16px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.25)',
-              borderRadius: '8px',
-              color: '#f87171',
-              fontSize: '0.85rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <AlertTriangle size={16} />
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 flex items-center gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{searchError}</span>
             </div>
           )}
 
           {/* Quick Select Chips */}
           {recentTransactions.length > 0 && (
-            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #1e293b' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
-                Quick Lookup Recent Core Transactions:
+            <div className="pt-3 border-t border-gray-100">
+              <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Quick Select Recent Core Transactions:
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <div className="flex flex-wrap gap-2">
                 {recentTransactions.map((tx) => (
                   <button
                     key={tx.id || tx.referenceId}
@@ -344,22 +244,15 @@ export default function FinancialReversalsPage() {
                       setSearchQuery(idStr);
                       handleSearch(idStr);
                     }}
-                    style={{
-                      padding: '5px 10px',
-                      backgroundColor: '#1e293b',
-                      color: tx.status === 'Reversed' ? '#f87171' : tx.status === 'Completed' ? '#34d399' : '#94a3b8',
-                      border: '1px solid #334155',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      fontFamily: 'monospace',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
+                    className={`px-2.5 py-1 rounded-md text-xs font-mono border transition-colors cursor-pointer ${
+                      tx.status === 'Reversed'
+                        ? 'bg-red-50 text-red-600 border-red-200'
+                        : tx.status === 'Completed'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
                   >
-                    <span>{tx.id || tx.referenceId}</span>
-                    <span style={{ fontSize: '10px', opacity: 0.8 }}>({tx.status})</span>
+                    {tx.id || tx.referenceId} ({tx.status})
                   </button>
                 ))}
               </div>
@@ -367,391 +260,163 @@ export default function FinancialReversalsPage() {
           )}
         </div>
 
-        {/* Selected Transaction Action Panel */}
+        {/* Selected Transaction Card */}
         {selectedTx && (
-          <div style={{
-            backgroundColor: '#0f172a',
-            borderRadius: '14px',
-            border: '1px solid #1e293b',
-            overflow: 'hidden',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)'
-          }}>
-            {/* Header Badge */}
-            <div style={{
-              padding: '16px 24px',
-              backgroundColor: '#131e36',
-              borderBottom: '1px solid #1e293b',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Ledger Record:</span>
-                <span style={{ fontFamily: 'monospace', fontSize: '1rem', fontWeight: 700, color: '#38bdf8' }}>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden space-y-6 p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-gray-500 uppercase">Ledger Record:</span>
+                <span className="font-mono font-bold text-sm text-blue-600">
                   {selectedTx.referenceId || selectedTx.id}
                 </span>
-                <span style={{
-                  padding: '3px 10px',
-                  borderRadius: '20px',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  backgroundColor: selectedTx.status === 'Reversed'
-                    ? 'rgba(239, 68, 68, 0.15)'
-                    : selectedTx.status === 'Completed'
-                    ? 'rgba(16, 185, 129, 0.15)'
-                    : selectedTx.status === 'FraudConfirmed'
-                    ? 'rgba(245, 158, 11, 0.15)'
-                    : 'rgba(56, 189, 248, 0.15)',
-                  color: selectedTx.status === 'Reversed'
-                    ? '#f87171'
-                    : selectedTx.status === 'Completed'
-                    ? '#34d399'
-                    : selectedTx.status === 'FraudConfirmed'
-                    ? '#fbbf24'
-                    : '#38bdf8',
-                  border: '1px solid currentColor'
-                }}>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                  selectedTx.status === 'Reversed' ? 'bg-red-50 text-red-600 border border-red-200' :
+                  selectedTx.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                  'bg-blue-50 text-blue-600 border border-blue-200'
+                }`}>
                   {selectedTx.status?.toUpperCase()}
                 </span>
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#64748b' }}>
-                <Clock size={14} />
+              <div className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
                 <span>{selectedTx.timestamp ? new Date(selectedTx.timestamp).toLocaleString() : 'N/A'}</span>
               </div>
             </div>
 
-            {/* Body Information Grid */}
-            <div style={{ padding: '24px' }}>
-              {/* Financial Magnitude Banner */}
-              <div style={{
-                padding: '20px',
-                borderRadius: '12px',
-                backgroundColor: 'rgba(30, 41, 59, 0.5)',
-                border: '1px solid #334155',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '16px',
-                marginBottom: '24px'
-              }}>
-                <div>
-                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>
-                    Authoritative Transfer Amount
-                  </div>
-                  <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em' }}>
-                    Rs. {Number(selectedTx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: 500, marginLeft: '6px' }}>LKR</span>
-                  </div>
+            {/* Financial Magnitude */}
+            <div className="bg-slate-50 border border-gray-200 rounded-lg p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                  Transfer Amount
                 </div>
-
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>
-                    AI Risk Evaluation Score
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                    <span style={{
-                      fontSize: '1.25rem',
-                      fontWeight: 800,
-                      color: selectedTx.riskScore >= 70 ? '#f87171' : selectedTx.riskScore >= 50 ? '#fbbf24' : '#34d399'
-                    }}>
-                      {selectedTx.riskScore || 0}/100
-                    </span>
-                  </div>
+                <div className="text-3xl font-extrabold text-gray-900">
+                  Rs. {Number(selectedTx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-sm text-gray-500 font-medium ml-2">LKR</span>
                 </div>
               </div>
 
-              {/* Sender & Recipient Comparison Columns */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-                {/* Sender Wallet/Account Box */}
-                <div style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  backgroundColor: '#0a0f1d',
-                  border: '1px solid #1e293b'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontSize: '0.85rem', fontWeight: 700, marginBottom: '12px' }}>
-                    <CreditCard size={16} /> Original Originating Account (Sender)
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Account No: </span>
-                      <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>{selectedTx.senderAccountNumber || `ACC-${selectedTx.senderWalletId}`}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Account Holder: </span>
-                      <strong style={{ color: '#f8fafc' }}>{selectedTx.senderName || 'N/A'}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Email: </span>
-                      <span style={{ color: '#cbd5e1' }}>{selectedTx.senderEmail || 'N/A'}</span>
-                    </div>
-                  </div>
+              <div>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 text-right">
+                  Risk Score
                 </div>
-
-                {/* Recipient Account Box */}
-                <div style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  backgroundColor: '#0a0f1d',
-                  border: '1px solid #1e293b'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b', fontSize: '0.85rem', fontWeight: 700, marginBottom: '12px' }}>
-                    <ArrowRight size={16} /> Credited Beneficiary Account (Recipient)
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Account No: </span>
-                      <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>{selectedTx.receiverAccountNumber || (selectedTx.receiverWalletId ? `ACC-${selectedTx.receiverWalletId}` : 'External / N/A')}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Beneficiary Name: </span>
-                      <strong style={{ color: '#f8fafc' }}>{selectedTx.receiverName || 'Recipient'}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Email: </span>
-                      <span style={{ color: '#cbd5e1' }}>{selectedTx.receiverEmail || 'N/A'}</span>
-                    </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold text-gray-900">{selectedTx.riskScore || 0}/100</span>
+                  <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${selectedTx.riskScore >= 70 ? 'bg-red-600' : selectedTx.riskScore >= 40 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${selectedTx.riskScore || 0}%` }}
+                    />
                   </div>
                 </div>
               </div>
-
-              {/* Memo Note */}
-              {selectedTx.note && (
-                <div style={{
-                  padding: '12px 16px',
-                  backgroundColor: '#0a0f1d',
-                  borderRadius: '8px',
-                  border: '1px solid #1e293b',
-                  fontSize: '0.85rem',
-                  color: '#94a3b8',
-                  marginBottom: '24px'
-                }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Ledger Note: </span>
-                  {selectedTx.note}
-                </div>
-              )}
-
-              {/* Reversal Eligibility Notice & Action Button */}
-              {selectedTx.status === 'Reversed' ? (
-                <div style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  color: '#f87171',
-                  fontSize: '0.9rem'
-                }}>
-                  <ShieldAlert size={20} />
-                  <span>This transaction has already been reversed. No duplicate reversals may be executed.</span>
-                </div>
-              ) : !isReversible ? (
-                <div style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(245, 158, 11, 0.08)',
-                  border: '1px solid rgba(245, 158, 11, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  color: '#fbbf24',
-                  fontSize: '0.9rem'
-                }}>
-                  <AlertTriangle size={20} />
-                  <span>
-                    Transaction is currently in status <strong>{selectedTx.status}</strong>.
-                    Per FinCore institutional compliance policy, only transactions in <strong>Completed</strong> or <strong>FraudConfirmed</strong> state can be reversed.
-                  </span>
-                </div>
-              ) : (
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '16px',
-                  padding: '16px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  borderRadius: '10px'
-                }}>
-                  <div style={{ maxWidth: '650px' }}>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f87171', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <AlertTriangle size={18} /> Reversal Action Permitted
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginTop: '4px' }}>
-                      This transaction is eligible for financial reversal. Executing this will claw back funds from recipient and refund sender.
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setActionError(null);
-                      setIsModalOpen(true);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 24px',
-                      backgroundColor: '#dc2626',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '0.9rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 14px rgba(220, 38, 38, 0.4)',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <RotateCcw size={16} />
-                    <span>Execute Financial Reversal</span>
-                  </button>
-                </div>
-              )}
             </div>
+
+            {/* Counterparty Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-slate-50 border border-gray-200 rounded-lg p-4 space-y-2 text-xs">
+                <div className="font-bold text-blue-600 flex items-center gap-2 mb-2">
+                  <CreditCard className="w-4 h-4" /> Sender (Originating Account)
+                </div>
+                <div><span className="text-gray-500">Account No:</span> <strong className="font-mono text-gray-900">{selectedTx.senderAccountNumber || `ACC-${selectedTx.senderWalletId}`}</strong></div>
+                <div><span className="text-gray-500">Holder:</span> <strong className="text-gray-900">{selectedTx.senderName || 'N/A'}</strong></div>
+                <div><span className="text-gray-500">Email:</span> <span className="text-gray-700">{selectedTx.senderEmail || 'N/A'}</span></div>
+              </div>
+
+              <div className="bg-slate-50 border border-gray-200 rounded-lg p-4 space-y-2 text-xs">
+                <div className="font-bold text-amber-700 flex items-center gap-2 mb-2">
+                  <ArrowRight className="w-4 h-4" /> Recipient (Beneficiary Account)
+                </div>
+                <div><span className="text-gray-500">Account No:</span> <strong className="font-mono text-gray-900">{selectedTx.receiverAccountNumber || 'N/A'}</strong></div>
+                <div><span className="text-gray-500">Beneficiary:</span> <strong className="text-gray-900">{selectedTx.receiverName || 'Recipient'}</strong></div>
+                <div><span className="text-gray-500">Email:</span> <span className="text-gray-700">{selectedTx.receiverEmail || 'N/A'}</span></div>
+              </div>
+            </div>
+
+            {/* Reversal Action Button */}
+            {selectedTx.status === 'Reversed' ? (
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-medium flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 shrink-0" />
+                <span>This transaction has already been reversed. No duplicate reversals permitted.</span>
+              </div>
+            ) : !isReversible ? (
+              <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <span>Only transactions in <strong>Completed</strong> or <strong>FraudConfirmed</strong> status can be reversed.</span>
+              </div>
+            ) : (
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="text-xs">
+                  <div className="font-bold text-red-800 text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" /> Reversal Action Permitted
+                  </div>
+                  <div className="text-red-700 mt-0.5">
+                    Claw back funds from recipient and issue full refund to sender.
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setActionError(null);
+                    setIsModalOpen(true);
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 text-xs rounded-md shadow-sm transition-colors cursor-pointer shrink-0"
+                >
+                  Execute Financial Reversal
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Confirmation Modal */}
+        {/* Modal */}
         {isModalOpen && selectedTx && (
-          <div style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            zIndex: 1000
-          }}>
-            <div style={{
-              width: '100%',
-              maxWidth: '560px',
-              backgroundColor: '#0f172a',
-              borderRadius: '16px',
-              border: '1px solid #334155',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
-              overflow: 'hidden'
-            }}>
-              {/* Modal Header */}
-              <div style={{
-                padding: '20px 24px',
-                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                borderBottom: '1px solid rgba(239, 68, 68, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}>
-                <div style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#f87171'
-                }}>
-                  <AlertTriangle size={20} />
-                </div>
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-lg w-full overflow-hidden">
+              <div className="p-5 bg-red-600 text-white flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 shrink-0" />
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc', margin: 0 }}>
-                    Confirm Financial Reversal
-                  </h3>
-                  <div style={{ fontSize: '0.8rem', color: '#fca5a5' }}>
-                    Irreversible Core Ledger Operation
-                  </div>
+                  <h3 className="text-base font-bold">Confirm Financial Reversal</h3>
+                  <div className="text-xs text-red-100">Irreversible Core Ledger Operation</div>
                 </div>
               </div>
 
-              {/* Modal Body */}
-              <form onSubmit={handleExecuteReversal} style={{ padding: '24px' }}>
-                <p style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.6, margin: '0 0 16px 0' }}>
-                  You are about to execute an authoritative ledger reversal for transaction:
+              <form onSubmit={handleExecuteReversal} className="p-6 space-y-4 text-xs">
+                <p className="text-gray-700 leading-relaxed">
+                  Executing authoritative ledger reversal for transaction:
                 </p>
 
-                <div style={{
-                  padding: '14px',
-                  backgroundColor: '#070c18',
-                  borderRadius: '8px',
-                  border: '1px solid #1e293b',
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  marginBottom: '20px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Transaction ID:</span>
-                    <strong style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{selectedTx.referenceId || selectedTx.id}</strong>
+                <div className="p-3 bg-slate-50 border border-gray-200 rounded-lg space-y-1.5 font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Transaction ID:</span>
+                    <strong className="text-blue-600">{selectedTx.referenceId || selectedTx.id}</strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Claw-back / Refund Amount:</span>
-                    <strong style={{ color: '#f87171' }}>Rs. {Number(selectedTx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} LKR</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Debiting Recipient:</span>
-                    <span style={{ color: '#f8fafc' }}>{selectedTx.receiverAccountNumber || 'Recipient Account'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Crediting Sender:</span>
-                    <span style={{ color: '#f8fafc' }}>{selectedTx.senderAccountNumber || 'Sender Account'}</span>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Refund Amount:</span>
+                    <strong className="text-red-600">Rs. {Number(selectedTx.amount).toLocaleString()} LKR</strong>
                   </div>
                 </div>
 
-                {/* Mandatory Reversal Reason Input */}
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '8px' }}>
-                    Reversal Reason / Compliance Justification <span style={{ color: '#f87171' }}>*</span>
+                <div>
+                  <label className="block font-semibold text-gray-700 uppercase mb-1">
+                    Reversal Reason / Rationale <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     rows={3}
-                    placeholder="Enter compliance justification (e.g. Confirmed unauthorized account access; Chargeback requested by customer; FraudConfirmed resolution)."
+                    placeholder="Enter compliance justification..."
                     value={reversalReason}
                     onChange={(e) => setReversalReason(e.target.value)}
                     required
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      backgroundColor: '#070c18',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                      color: '#f8fafc',
-                      fontSize: '0.85rem',
-                      outline: 'none',
-                      resize: 'vertical'
-                    }}
+                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-                    This reason will be permanently archived in the institutional Audit Trail.
-                  </div>
                 </div>
 
                 {actionError && (
-                  <div style={{
-                    marginBottom: '16px',
-                    padding: '10px 14px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    borderRadius: '6px',
-                    color: '#f87171',
-                    fontSize: '0.85rem'
-                  }}>
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-xs font-medium">
                     {actionError}
                   </div>
                 )}
 
-                {/* Modal Footer Actions */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"
                     disabled={isSubmitting}
@@ -759,49 +424,16 @@ export default function FinancialReversalsPage() {
                       setIsModalOpen(false);
                       setReversalReason('');
                     }}
-                    style={{
-                      padding: '10px 18px',
-                      backgroundColor: '#1e293b',
-                      color: '#cbd5e1',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
+                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-slate-50 cursor-pointer"
                   >
                     Cancel
                   </button>
-
                   <button
                     type="submit"
                     disabled={isSubmitting || !reversalReason.trim()}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 20px',
-                      backgroundColor: '#dc2626',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: (isSubmitting || !reversalReason.trim()) ? 'not-allowed' : 'pointer',
-                      opacity: (isSubmitting || !reversalReason.trim()) ? 0.6 : 1
-                    }}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-sm disabled:opacity-50 cursor-pointer"
                   >
-                    {isSubmitting ? (
-                      <>
-                        <div style={{ width: '14px', height: '14px', border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                        <span>Processing Reversal...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RotateCcw size={15} />
-                        <span>Confirm & Execute Reversal</span>
-                      </>
-                    )}
+                    {isSubmitting ? 'Processing...' : 'Confirm Reversal'}
                   </button>
                 </div>
               </form>

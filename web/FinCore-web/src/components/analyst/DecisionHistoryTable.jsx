@@ -14,13 +14,12 @@ import {
   RotateCcw,
   Clock,
   User,
-  Shield,
   ExternalLink
 } from 'lucide-react';
 import { auditService } from '../../services/auditService';
 
 // ============================================================================
-// 1. Error Boundary to prevent any whiteout crashes
+// 1. Error Boundary
 // ============================================================================
 class AuditErrorBoundary extends Component {
   constructor(props) {
@@ -33,24 +32,16 @@ class AuditErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('AuditErrorBoundary caught an unhandled render error:', error, errorInfo);
+    console.error('AuditErrorBoundary caught error:', error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          border: '1px solid #fecaca',
-          padding: '32px',
-          textAlign: 'center',
-          color: '#991b1b',
-          margin: '20px 0'
-        }}>
-          <ShieldAlert size={40} color="#dc2626" style={{ margin: '0 auto 12px auto' }} />
-          <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px 0' }}>Audit Trail Display Error</h3>
-          <p style={{ fontSize: '13px', color: '#7f1d1d', margin: '0 0 16px 0' }}>
+        <div className="bg-white rounded-lg border border-red-200 p-8 text-center text-red-800 my-4 shadow-sm">
+          <ShieldAlert className="w-10 h-10 text-red-600 mx-auto mb-3" />
+          <h3 className="text-lg font-bold mb-2">Audit Trail Display Error</h3>
+          <p className="text-xs text-red-700 mb-4">
             An unexpected error occurred while parsing audit records: {this.state.error?.message || 'Unknown error'}
           </p>
           <button
@@ -58,16 +49,7 @@ class AuditErrorBoundary extends Component {
               this.setState({ hasError: false, error: null });
               if (this.props.onRetry) this.props.onRetry();
             }}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#dc2626',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer"
           >
             Retry Audit Trail
           </button>
@@ -78,9 +60,6 @@ class AuditErrorBoundary extends Component {
   }
 }
 
-// ============================================================================
-// 2. Safe Date & String Utilities
-// ============================================================================
 function safeDateStrings(dateVal) {
   if (!dateVal) return { utc: 'N/A', local: 'N/A' };
   try {
@@ -96,7 +75,7 @@ function safeDateStrings(dateVal) {
 }
 
 // ============================================================================
-// 3. Main Decision & Audit History Table Component
+// 2. Main Decision & Audit History Table Component
 // ============================================================================
 function DecisionHistoryTableInner({
   queue,
@@ -107,22 +86,17 @@ function DecisionHistoryTableInner({
 }) {
   const [records, setRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('ALL');
   const [riskTierFilter, setRiskTierFilter] = useState('ALL');
 
-  // Fetch live audit history from PostgreSQL
   const loadLiveHistory = async () => {
     setIsLoading(true);
-    setLoadError(null);
     try {
       const data = await auditService.getAuditHistory();
       setRecords(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to load audit history from backend:', err);
-      setLoadError(err.response?.data?.message || err.message || 'Failed to connect to audit history API');
-      // If props items or queue provided, fallback to that
+      console.error('Failed to load audit history:', err);
       if (Array.isArray(items) && items.length > 0) {
         setRecords(items);
       } else if (Array.isArray(queue) && queue.length > 0) {
@@ -146,25 +120,18 @@ function DecisionHistoryTableInner({
   }, [items, queue, fetchLive]);
 
   const handleManualRefresh = async () => {
-    if (onRefresh) {
-      onRefresh();
-    }
+    if (onRefresh) onRefresh();
     await loadLiveHistory();
   };
 
-  // Filter and normalize records
   const filteredRecords = records.filter(r => {
     if (!r) return false;
 
-    // Action Filter
     const actionUpper = String(r.action || r.decision || '').toUpperCase();
     if (actionFilter !== 'ALL') {
-      if (!actionUpper.includes(actionFilter)) {
-        return false;
-      }
+      if (!actionUpper.includes(actionFilter)) return false;
     }
 
-    // Risk Tier Filter
     const tierUpper = String(r.riskTier || '').toUpperCase();
     const score = Number(r.riskScore) || 0;
     if (riskTierFilter === 'CRITICAL' && !tierUpper.includes('CRIT') && score < 70) return false;
@@ -172,7 +139,6 @@ function DecisionHistoryTableInner({
     if (riskTierFilter === 'MEDIUM' && !tierUpper.includes('MED') && (score < 30 || score >= 50)) return false;
     if (riskTierFilter === 'LOW' && !tierUpper.includes('LOW') && score >= 30) return false;
 
-    // Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const ref = String(r.referenceId || r.reference || r.txId || r.queueCode || '').toLowerCase();
@@ -181,7 +147,6 @@ function DecisionHistoryTableInner({
       const sender = String(r.senderName || r.senderAccountNumber || '').toLowerCase();
       const recipient = String(r.recipientName || r.recipientAccountNo || '').toLowerCase();
       const notes = String(r.notes || r.reason || r.description || '').toLowerCase();
-      const action = actionUpper.toLowerCase();
 
       return (
         ref.includes(q) ||
@@ -189,137 +154,96 @@ function DecisionHistoryTableInner({
         analystId.includes(q) ||
         sender.includes(q) ||
         recipient.includes(q) ||
-        notes.includes(q) ||
-        action.includes(q)
+        notes.includes(q)
       );
     }
 
     return true;
   });
 
-  // Action badge visual styling
-  const getActionBadge = (rawAction) => {
+  const getActionBadgeClass = (rawAction) => {
     const act = String(rawAction || 'PENDING').toUpperCase();
     if (act.includes('APPROV')) {
       return {
-        bg: '#dcfce7',
-        text: '#15803d',
-        border: '#86efac',
-        icon: <CheckCircle2 size={13} style={{ marginRight: '4px' }} />,
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        icon: <CheckCircle2 className="w-3.5 h-3.5 mr-1" />,
         label: 'Approved'
       };
     }
     if (act.includes('REJECT') || act.includes('BLOCK') || act.includes('FRAUD')) {
       return {
-        bg: '#fee2e2',
-        text: '#b91c1c',
-        border: '#fca5a5',
-        icon: <XCircle size={13} style={{ marginRight: '4px' }} />,
+        badgeClass: 'bg-red-50 text-red-600 border-red-200',
+        icon: <XCircle className="w-3.5 h-3.5 mr-1" />,
         label: 'Rejected'
       };
     }
     if (act.includes('ESCALAT')) {
       return {
-        bg: '#ede9fe',
-        text: '#6d28d9',
-        border: '#c4b5fd',
-        icon: <AlertOctagon size={13} style={{ marginRight: '4px' }} />,
+        badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+        icon: <AlertOctagon className="w-3.5 h-3.5 mr-1" />,
         label: 'Escalated'
       };
     }
     if (act.includes('INFO') || act.includes('REVISION')) {
       return {
-        bg: '#fef3c7',
-        text: '#b45309',
-        border: '#fde68a',
-        icon: <HelpCircle size={13} style={{ marginRight: '4px' }} />,
+        badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+        icon: <HelpCircle className="w-3.5 h-3.5 mr-1" />,
         label: 'Info Requested'
       };
     }
     if (act.includes('REVERS')) {
       return {
-        bg: '#ffe4e6',
-        text: '#be123c',
-        border: '#fda4af',
-        icon: <RotateCcw size={13} style={{ marginRight: '4px' }} />,
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+        icon: <RotateCcw className="w-3.5 h-3.5 mr-1" />,
         label: 'Reversed'
       };
     }
     return {
-      bg: '#f1f5f9',
-      text: '#475569',
-      border: '#cbd5e1',
-      icon: <Clock size={13} style={{ marginRight: '4px' }} />,
+      badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+      icon: <Clock className="w-3.5 h-3.5 mr-1" />,
       label: act
     };
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="space-y-6 font-sans">
       
       {/* Header and Context Banner */}
       <div>
-        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.4px' }}>
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
           COMPLIANCE &gt; AUDIT TRAILS
         </div>
-        <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
           Full Decision History &amp; Governance Audit Trail
         </h1>
-        <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
+        <p className="text-gray-500 text-sm mt-1">
           Enterprise regulatory audit log tracking timestamped analyst decisions, risk telemetry, dual maker-checker sign-offs, and compliance justifications stored permanently in PostgreSQL.
         </p>
       </div>
 
       {/* Toolbar: Search, Filters, Refresh, Export */}
-      <div style={{
-        backgroundColor: '#ffffff',
-        borderRadius: '12px',
-        padding: '16px 20px',
-        border: '1px solid #e2e8f0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '12px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-      }}>
-        {/* Left: Search input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '280px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '340px' }}>
-            <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '10px' }} />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        
+        {/* Left: Search input & dropdowns */}
+        <div className="flex items-center gap-3 flex-wrap w-full md:w-auto flex-1">
+          <div className="relative w-full md:w-72">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Search reference, analyst, account, reason..."
+              placeholder="Search reference, analyst, account..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px 8px 36px',
-                fontSize: '12px',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-gray-400"
             />
           </div>
 
           {/* Action Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Filter size={14} color="#64748b" />
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-gray-500" />
             <select
               value={actionFilter}
               onChange={(e) => setActionFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                fontSize: '12px',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                backgroundColor: '#fff',
-                color: '#334155',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
+              className="px-3 py-1.5 bg-slate-50 border border-gray-300 rounded-lg text-xs font-medium text-gray-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
             >
               <option value="ALL">All Actions</option>
               <option value="APPROV">Approved Only</option>
@@ -334,16 +258,7 @@ function DecisionHistoryTableInner({
           <select
             value={riskTierFilter}
             onChange={(e) => setRiskTierFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              fontSize: '12px',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              backgroundColor: '#fff',
-              color: '#334155',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
+            className="px-3 py-1.5 bg-slate-50 border border-gray-300 rounded-lg text-xs font-medium text-gray-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
           >
             <option value="ALL">All Risk Tiers</option>
             <option value="CRITICAL">Critical Risk (&ge; 70)</option>
@@ -354,157 +269,66 @@ function DecisionHistoryTableInner({
         </div>
 
         {/* Right: Refresh & CSV Export */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="flex items-center gap-2.5">
           <button
             onClick={handleManualRefresh}
             disabled={isLoading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              backgroundColor: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: '#475569',
-              cursor: isLoading ? 'not-allowed' : 'pointer'
-            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer shadow-sm transition-colors"
           >
-            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             {isLoading ? 'Loading...' : 'Refresh'}
           </button>
 
           <button
             onClick={() => auditService.exportAuditToCsv(filteredRecords)}
             disabled={filteredRecords.length === 0}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              backgroundColor: filteredRecords.length === 0 ? '#94a3b8' : '#16a34a',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 700,
-              cursor: filteredRecords.length === 0 ? 'not-allowed' : 'pointer',
-              boxShadow: filteredRecords.length === 0 ? 'none' : '0 2px 4px rgba(22, 163, 74, 0.3)',
-              transition: 'background-color 0.15s ease'
-            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50 cursor-pointer shadow-sm transition-colors"
           >
-            <Download size={14} />
+            <Download className="w-3.5 h-3.5" />
             <span>Export Audit CSV</span>
           </button>
         </div>
       </div>
 
       {/* Main Table Card */}
-      <div style={{
-        backgroundColor: '#fff',
-        borderRadius: '12px',
-        border: '1px solid #e2e8f0',
-        overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-      }}>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
-          <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              border: '3px solid #e2e8f0',
-              borderTopColor: '#2563eb',
-              borderRadius: '50%',
-              margin: '0 auto 16px auto',
-              animation: 'spin 0.8s linear infinite'
-            }} />
-            <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
-              Querying PostgreSQL Audit Log Records...
-            </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
-              Retrieving cryptographic decision events, maker-checker signatures, and telemetry
-            </div>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <div className="p-12 text-center text-gray-500">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+            <div className="text-sm font-semibold text-gray-800">Querying PostgreSQL Audit Log Records...</div>
           </div>
         ) : filteredRecords.length === 0 ? (
-          <div style={{
-            padding: '64px 24px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              backgroundColor: '#f1f5f9',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px'
-            }}>
-              <FileCheck2 size={28} color="#64748b" />
+          <div className="p-16 text-center text-gray-500 space-y-3">
+            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-500">
+              <FileCheck2 className="w-6 h-6" />
             </div>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b', margin: '0 0 6px 0' }}>
-              No audit history available.
-            </h3>
-            <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '420px', margin: '0 0 20px 0', lineHeight: 1.5 }}>
+            <h3 className="text-base font-bold text-gray-900">No audit history available</h3>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto">
               {records.length === 0
-                ? 'No compliance audit records or decision logs found in PostgreSQL database.'
-                : 'No audit records match the current filter or search criteria.'}
+                ? 'No compliance audit records or decision logs found in database.'
+                : 'No audit records match the current filter criteria.'}
             </p>
-            <button
-              onClick={handleManualRefresh}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 18px',
-                backgroundColor: '#2563eb',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              <RefreshCw size={14} /> Refresh Audit History
-            </button>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr style={{
-                  backgroundColor: '#f8fafc',
-                  color: '#475569',
-                  borderBottom: '1px solid #e2e8f0',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.4px',
-                  fontSize: '11px'
-                }}>
-                  <th style={{ padding: '14px 16px', fontWeight: 700 }}>Timestamp</th>
-                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Actor / Analyst</th>
-                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Action</th>
-                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Transaction / Reference</th>
-                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Status Transition</th>
-                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Risk Info</th>
-                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Dual Approver</th>
-                  <th style={{ padding: '14px 16px', fontWeight: 700 }}>Description / Reason</th>
+                <tr className="bg-slate-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3.5">Timestamp</th>
+                  <th className="px-6 py-3.5">Actor / Analyst</th>
+                  <th className="px-6 py-3.5">Action</th>
+                  <th className="px-6 py-3.5">Transaction / Reference</th>
+                  <th className="px-6 py-3.5">Status Transition</th>
+                  <th className="px-6 py-3.5">Risk Info</th>
+                  <th className="px-6 py-3.5">Dual Approver</th>
+                  <th className="px-6 py-3.5">Description / Reason</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100 text-sm">
                 {filteredRecords.map((r, idx) => {
                   const dateInfo = safeDateStrings(r.timestamp || r.decidedAt);
-                  const badge = getActionBadge(r.action || r.decision);
+                  const badge = getActionBadgeClass(r.action || r.decision);
                   const score = Number(r.riskScore) || 0;
-                  const scoreColor = score >= 70 ? '#dc2626' : score >= 50 ? '#d97706' : '#16a34a';
-
                   const rawAmount = Number(r.amount) || 0;
                   const reference = r.referenceId || r.reference || r.queueCode || r.txId || 'N/A';
                   const prevStatus = r.previousStatus || 'Queued';
@@ -517,148 +341,87 @@ function DecisionHistoryTableInner({
                   return (
                     <tr
                       key={r.id || idx}
-                      style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        transition: 'background-color 0.1s ease',
-                        cursor: onOpenCase ? 'pointer' : 'default'
-                      }}
                       onClick={onOpenCase ? () => onOpenCase(r) : undefined}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f8fafc'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; }}
+                      className="border-b border-gray-100 hover:bg-slate-50 transition-colors"
                     >
-                      {/* 1. Timestamp (UTC + Local) */}
-                      <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
+                      {/* 1. Timestamp */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="font-mono font-semibold text-xs text-gray-900">
                           {dateInfo.utc}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        <div className="text-[11px] text-gray-400 mt-0.5">
                           Local: {dateInfo.local}
                         </div>
                       </td>
 
-                      {/* 2. Actor / Analyst */}
-                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <User size={13} color="#64748b" />
-                          <span style={{ fontWeight: 700, color: '#0f172a' }}>{actorName}</span>
+                      {/* 2. Actor */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="font-bold text-xs text-gray-900">{actorName}</span>
                         </div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#64748b', marginTop: '2px', paddingLeft: '19px' }}>
+                        <div className="font-mono text-[11px] text-gray-400 pl-5 mt-0.5">
                           {actorId}
                         </div>
                       </td>
 
                       {/* 3. Action */}
-                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          fontWeight: 700,
-                          fontSize: '11px',
-                          backgroundColor: badge.bg,
-                          color: badge.text,
-                          border: `1px solid ${badge.border}`
-                        }}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border inline-flex items-center ${badge.badgeClass}`}>
                           {badge.icon}
                           {badge.label}
                         </span>
                       </td>
 
                       {/* 4. Reference & Amount */}
-                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2563eb' }}>
-                            {reference}
-                          </span>
-                          {onOpenCase && (
-                            <ExternalLink size={12} color="#2563eb" style={{ opacity: 0.7 }} />
-                          )}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1 font-mono font-bold text-xs text-blue-600">
+                          <span>{reference}</span>
+                          {onOpenCase && <ExternalLink className="w-3 h-3 opacity-70" />}
                         </div>
                         {rawAmount > 0 && (
-                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '12px', marginTop: '2px' }}>
+                          <div className="font-bold text-xs text-gray-900 mt-0.5">
                             Rs. {rawAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </div>
-                        )}
-                        {(r.senderName || r.recipientName) && (
-                          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                            {r.senderName || 'Sender'} &rarr; {r.recipientName || 'Recipient'}
                           </div>
                         )}
                       </td>
 
-                      {/* 5. Status Transition: Prev -> New */}
-                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                          <span style={{
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: '#f1f5f9',
-                            color: '#475569',
-                            fontWeight: 600
-                          }}>
+                      {/* 5. Status Transition */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
                             {prevStatus}
                           </span>
-                          <ArrowRight size={12} color="#94a3b8" />
-                          <span style={{
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: badge.bg,
-                            color: badge.text,
-                            fontWeight: 700
-                          }}>
+                          <ArrowRight className="w-3 h-3 text-gray-400" />
+                          <span className={`px-2 py-0.5 rounded font-bold border ${badge.badgeClass}`}>
                             {newStatus}
                           </span>
                         </div>
                       </td>
 
-                      {/* 6. Risk Information */}
-                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            fontWeight: 800,
-                            fontSize: '11px',
-                            backgroundColor: `${scoreColor}18`,
-                            color: scoreColor,
-                            border: `1px solid ${scoreColor}40`
-                          }}>
-                            {score}/100
-                          </span>
-                          <span style={{
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            color: scoreColor
-                          }}>
-                            {r.riskTier || (score >= 70 ? 'CRITICAL' : score >= 50 ? 'HIGH' : 'MEDIUM')}
-                          </span>
+                      {/* 6. Risk Info */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-gray-900">{score}/100</span>
+                          <div className="w-12 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${score >= 70 ? 'bg-red-600' : score >= 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${score}%` }}
+                            />
+                          </div>
                         </div>
                       </td>
 
-                      {/* 7. Secondary Approver */}
-                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <span style={{
-                          fontSize: '11px',
-                          color: secApprover.includes('N/A') ? '#94a3b8' : '#7c3aed',
-                          fontWeight: secApprover.includes('N/A') ? 500 : 700
-                        }}>
+                      {/* 7. Dual Approver */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`text-xs ${secApprover.includes('N/A') ? 'text-gray-400 font-normal' : 'text-purple-700 font-bold'}`}>
                           {secApprover}
                         </span>
                       </td>
 
-                      {/* 8. Description / Compliance Justification */}
-                      <td style={{ padding: '14px 16px', maxWidth: '280px' }}>
-                        <div style={{
-                          fontSize: '11px',
-                          color: '#334155',
-                          lineHeight: 1.4,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical'
-                        }} title={notes}>
+                      {/* 8. Notes */}
+                      <td className="px-6 py-4 max-w-xs">
+                        <div className="text-xs text-gray-700 line-clamp-2" title={notes}>
                           {notes}
                         </div>
                       </td>
@@ -670,22 +433,13 @@ function DecisionHistoryTableInner({
           </div>
         )}
 
-        {/* Table Footer Summary */}
-        <div style={{
-          padding: '12px 20px',
-          backgroundColor: '#f8fafc',
-          borderTop: '1px solid #e2e8f0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '12px',
-          color: '#64748b'
-        }}>
+        {/* Table Footer */}
+        <div className="px-6 py-3 bg-slate-50 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
           <span>
-            Showing <strong>{filteredRecords.length}</strong> of <strong>{records.length}</strong> compliance audit events
+            Showing <strong className="text-gray-900">{filteredRecords.length}</strong> of <strong className="text-gray-900">{records.length}</strong> compliance audit events
           </span>
-          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-            All records cryptographically traced in PostgreSQL <code>ApprovalDecisions</code> &amp; <code>AuditLogs</code>
+          <span className="text-[11px] text-gray-400">
+            All records cryptographically traced in PostgreSQL
           </span>
         </div>
       </div>
@@ -694,7 +448,6 @@ function DecisionHistoryTableInner({
   );
 }
 
-// Wrapped in Error Boundary for resilience
 export default function DecisionHistoryTable(props) {
   return (
     <AuditErrorBoundary onRetry={props.onRefresh}>

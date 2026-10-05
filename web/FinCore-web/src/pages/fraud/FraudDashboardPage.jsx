@@ -8,14 +8,8 @@ import {
   Flag,
   Sliders,
   TrendingUp,
-  Inbox,
-  FileText,
   Search,
-  Bell,
-  ShieldAlert,
-  BarChart3,
-  RotateCcw,
-  FileCheck2
+  Bell
 } from 'lucide-react';
 
 export default function FraudDashboardPage({ initialTab = 'flags' }) {
@@ -34,78 +28,44 @@ export default function FraudDashboardPage({ initialTab = 'flags' }) {
   };
 
   const handleDecisionSubmitted = (flagId, decision, notes) => {
-    // Optionally update or trigger refresh
+    // Refresh handler if needed
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100%', backgroundColor: '#f1f5f9', fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
+    <div className="flex min-h-screen w-full bg-slate-50 font-sans text-gray-900">
 
-      {/* 1. Left Dark Navy Sidebar (#091124 / #1A233A) */}
-      <aside style={{
-        width: '250px',
-        backgroundColor: '#091124',
-        color: '#94a3b8',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-        borderRight: '1px solid #1e293b'
-      }}>
-        {/* Brand */}
-        <div style={{ padding: '24px 20px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #1e293b' }}>
-          <div style={{
-            backgroundColor: '#2563eb',
-            color: '#fff',
-            fontWeight: 800,
-            padding: '7px 11px',
-            borderRadius: '8px',
-            fontSize: '15px',
-            boxShadow: '0 2px 6px rgba(37,99,235,0.4)'
-          }}>
+      {/* 1. Left Dark Navy Sidebar (bg-slate-900) */}
+      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 min-h-screen select-none">
+        {/* Brand Header */}
+        <div className="p-5 border-b border-slate-800 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm shadow-md shadow-blue-600/30">
             FC
           </div>
           <div>
-            <div style={{ color: '#fff', fontWeight: 700, fontSize: '16px', letterSpacing: '0.4px' }}>FinCore</div>
-            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.8px' }}>FRAUD INTELLIGENCE</div>
+            <div className="font-bold text-base tracking-tight text-white">FinCore</div>
+            <div className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">FRAUD INTELLIGENCE</div>
           </div>
         </div>
 
         {/* Sidebar Nav Items */}
-        <nav style={{ padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', padding: '0 12px 8px', letterSpacing: '0.6px' }}>
+        <nav className="p-3 flex flex-col gap-1 flex-1">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 mt-2">
             FRAUD ENGINE
           </div>
 
           {/* Fraud Flags Tab */}
           <button
             onClick={() => setActiveTab('flags')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              color: activeTab === 'flags' || activeTab === 'flag-detail' ? '#fff' : '#94a3b8',
-              backgroundColor: activeTab === 'flags' || activeTab === 'flag-detail' ? '#2563eb' : 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              width: '100%',
-              textAlign: 'left',
-              transition: 'all 0.15s ease'
-            }}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === 'flags' || activeTab === 'flag-detail'
+                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Flag size={18} /> Fraud Flags
+            <div className="flex items-center gap-2.5">
+              <Flag className="w-4 h-4" /> Fraud Flags
             </div>
-            <span style={{
-              backgroundColor: activeTab === 'flags' ? '#1d4ed8' : '#dc2626',
-              color: '#fff',
-              fontSize: '11px',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              fontWeight: 700
-            }}>
+            <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
               LIVE
             </span>
           </button>
@@ -113,56 +73,34 @@ export default function FraudDashboardPage({ initialTab = 'flags' }) {
           {/* Rule Configuration Tab */}
           <button
             onClick={() => setActiveTab('rules')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              color: activeTab === 'rules' ? '#fff' : '#94a3b8',
-              backgroundColor: activeTab === 'rules' ? '#2563eb' : 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              width: '100%',
-              textAlign: 'left',
-              transition: 'all 0.15s ease'
-            }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === 'rules'
+                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
           >
-            <Sliders size={18} /> Rule Configuration
+            <Sliders className="w-4 h-4" /> Rule Configuration
           </button>
 
-          {/* Flagging Trends Dashboard Tab */}
+          {/* Flagging Trends Tab */}
           <button
             onClick={() => setActiveTab('trends')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              color: activeTab === 'trends' ? '#fff' : '#94a3b8',
-              backgroundColor: activeTab === 'trends' ? '#2563eb' : 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              width: '100%',
-              textAlign: 'left',
-              transition: 'all 0.15s ease'
-            }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === 'trends'
+                ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
           >
-            <TrendingUp size={18} /> Trends &amp; Analytics
+            <TrendingUp className="w-4 h-4" /> Trends &amp; Analytics
           </button>
 
           {activeTab === 'flag-detail' && selectedFlag && (
-            <div style={{ marginTop: '8px', padding: '10px 12px', backgroundColor: '#070c18', borderRadius: '8px', border: '1px solid #1e293b' }}>
-              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Active Inspection</div>
-              <div style={{ color: '#fff', fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>
+            <div className="mt-3 p-3 bg-slate-950/80 rounded-lg border border-slate-800 text-xs">
+              <div className="text-[10px] text-slate-400 font-semibold uppercase">Active Inspection</div>
+              <div className="text-white font-bold font-mono mt-0.5 truncate">
                 {selectedFlag.transactionId}
               </div>
-              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+              <div className="text-[11px] text-slate-400 mt-0.5">
                 Score: {selectedFlag.riskScore}/100
               </div>
             </div>
@@ -170,97 +108,49 @@ export default function FraudDashboardPage({ initialTab = 'flags' }) {
         </nav>
 
         {/* User Profile Footer */}
-        <div style={{ padding: '16px', borderTop: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            backgroundColor: '#2563eb',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontSize: '12px',
-            fontWeight: 700
-          }}>
+        <div className="p-3 m-3 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
             {user?.fullName ? user.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'AN'}
           </div>
           <div>
-            <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 600 }}>{user?.fullName || 'Fraud Specialist'}</div>
-            <div style={{ color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>REG: {user?.employeeId || (user?.role === 'Admin' ? 'ADM-001' : 'ANL-001')}</div>
+            <div className="text-xs font-semibold text-slate-100">{user?.fullName || 'Fraud Specialist'}</div>
+            <div className="text-[10px] text-slate-400 font-mono">BADGE: {user?.employeeId || 'ANL-001'}</div>
           </div>
         </div>
       </aside>
 
-      {/* 2. Main Content Workspace */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* 2. Main Content Area */}
+      <main className="flex-1 flex flex-col min-h-screen bg-slate-50 overflow-hidden">
 
         {/* Top Header Bar */}
-        <header style={{
-          height: '56px',
-          backgroundColor: '#0d1527',
-          borderBottom: '1px solid #1e293b',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '0 32px',
-          flexShrink: 0
-        }}>
-          {/* Global Search */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            backgroundColor: '#070c18',
-            padding: '6px 14px',
-            borderRadius: '8px',
-            border: '1px solid #1e293b',
-            width: '360px'
-          }}>
-            <Search size={15} color="#64748b" />
+        <header className="h-14 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between shrink-0">
+          {/* Global Search Bar */}
+          <div className="flex items-center gap-2.5 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg w-80">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search rule ID, TX code, IP, reason..."
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#f8fafc',
-                fontSize: '12px',
-                outline: 'none',
-                width: '100%',
-                fontFamily: 'inherit'
-              }}
+              placeholder="Search rule ID, TX code, IP..."
+              className="bg-transparent border-none text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none w-full"
             />
           </div>
 
           {/* Right Header Status Badges */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '11px',
-              color: '#10b981',
-              fontWeight: 600,
-              backgroundColor: '#064e3b26',
-              padding: '5px 12px',
-              borderRadius: '16px',
-              border: '1px solid #10b98133'
-            }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               Scoring Engine: Live
             </div>
 
-            <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 500 }}>
-              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+            <div className="text-slate-400 text-xs font-medium">
+              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </div>
           </div>
         </header>
 
-        {/* Scrollable Main Content Area */}
-        <div style={{ padding: '28px 36px', flex: 1, overflowY: 'auto' }}>
+        {/* Scrollable Main Workspace */}
+        <div className="p-6 md:p-8 flex-1 overflow-y-auto bg-slate-50">
           {activeTab === 'flags' && (
             <FraudFlagList
               onSelectFlag={handleSelectFlag}
@@ -275,7 +165,7 @@ export default function FraudDashboardPage({ initialTab = 'flags' }) {
               onBack={handleBackToFlags}
               onDecisionSubmitted={handleDecisionSubmitted}
               onNavigateToCase={(caseId) => {
-                navigate(`/analyst/review-queue?tab=case-detail&caseId=${encodeURIComponent(caseId)}`);
+                window.location.href = `/analyst/review-queue?tab=case-detail&caseId=${encodeURIComponent(caseId)}`;
               }}
             />
           )}

@@ -6,12 +6,6 @@ import {
   ArrowRight,
   ExternalLink,
   MapPin,
-  Globe,
-  Clock,
-  User,
-  CreditCard,
-  Smartphone,
-  AlertTriangle,
   FileText,
   Activity,
   Radio,
@@ -23,21 +17,11 @@ export default function FlagDetailBreakdown({ flag, onBack, onNavigateToCase }) 
 
   if (!flag) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-        <p style={{ color: '#64748b', fontSize: '14px' }}>No transaction selected for score breakdown.</p>
+      <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm space-y-3">
+        <p className="text-gray-500 text-xs font-semibold">No transaction selected for score breakdown.</p>
         <button
           onClick={onBack}
-          style={{
-            marginTop: '12px',
-            padding: '8px 16px',
-            backgroundColor: '#2563eb',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: 600
-          }}
+          className="bg-blue-600 text-white hover:bg-blue-700 font-medium px-4 py-2 text-xs rounded-md shadow-sm transition-colors cursor-pointer"
         >
           Return to Flag List
         </button>
@@ -45,19 +29,18 @@ export default function FlagDetailBreakdown({ flag, onBack, onNavigateToCase }) 
     );
   }
 
-  const getScoreColor = (score) => {
-    if (score >= 70) return { color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', tier: 'CRITICAL RISK' };
-    if (score >= 50) return { color: '#d97706', bg: '#fef3c7', border: '#fcd34d', tier: 'MODERATE RISK' };
-    return { color: '#16a34a', bg: '#dcfce7', border: '#86efac', tier: 'LOW RISK' };
+  const getScoreTheme = (score) => {
+    if (score >= 70) return { color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', tier: 'CRITICAL RISK', fill: 'bg-red-600' };
+    if (score >= 40) return { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', tier: 'MODERATE RISK', fill: 'bg-amber-500' };
+    return { color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', tier: 'LOW RISK', fill: 'bg-emerald-500' };
   };
 
-  const scoreTheme = getScoreColor(flag.riskScore || 0);
+  const scoreTheme = getScoreTheme(flag.riskScore || 0);
   const distanceKm = Number(flag.distanceDeltaKm ?? flag.distanceKm ?? 284);
   const isDistanceAnomaly = distanceKm > 100;
   const txAmount = Number(flag.amount) || 0;
   const queueId = flag.queueId || flag.rawTxId || flag.transactionId || 'Q-101';
 
-  // Dynamic baseline based on transaction amount
   const customerBaseline = flag.baselineAmount
     ? Number(flag.baselineAmount)
     : Math.max(1500, Math.round((txAmount * 0.35) / 500) * 500);
@@ -71,7 +54,6 @@ export default function FlagDetailBreakdown({ flag, onBack, onNavigateToCase }) 
     }
   };
 
-  // Dynamically format rule descriptions so no hardcoded mock amounts appear
   const dynamicRules = (flag.triggeredRules && flag.triggeredRules.length > 0)
     ? flag.triggeredRules.map(r => {
       let desc = r.description || '';
@@ -87,14 +69,12 @@ export default function FlagDetailBreakdown({ flag, onBack, onNavigateToCase }) 
         id: 'RUL-001',
         label: 'Transaction Magnitude Anomaly',
         points: flag.riskScore > 50 ? 30 : 15,
-        color: flag.riskScore > 50 ? '#dc2626' : '#f59e0b',
-        description: `Transaction amount Rs. ${txAmount.toLocaleString()} evaluated against statistical user baseline of Rs. ${customerBaseline.toLocaleString()}.`
+        description: `Transaction amount Rs. ${txAmount.toLocaleString()} evaluated against baseline of Rs. ${customerBaseline.toLocaleString()}.`
       },
       {
         id: 'RUL-002',
         label: 'Spatial / Geolocation Anomaly',
         points: isDistanceAnomaly ? 32 : 10,
-        color: isDistanceAnomaly ? '#dc2626' : '#10b981',
         description: isDistanceAnomaly
           ? `Distance delta of ${distanceKm} km from registered profile (${flag.homeLocation || 'Colombo'}).`
           : 'Origin IP within acceptable geographic operational zone.'
@@ -102,561 +82,215 @@ export default function FlagDetailBreakdown({ flag, onBack, onNavigateToCase }) 
     ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="space-y-6 font-sans text-gray-900">
 
       {/* Top Header Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              backgroundColor: '#fff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#334155',
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-              transition: 'background-color 0.15s'
-            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-slate-50 shadow-sm transition-colors cursor-pointer"
           >
-            <ArrowLeft size={16} /> Back to Flags
+            <ArrowLeft className="w-4 h-4" /> Back to Flags
           </button>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{
-                fontFamily: 'monospace',
-                fontSize: '18px',
-                fontWeight: 800,
-                color: '#2563eb'
-              }}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-lg font-extrabold text-blue-600">
                 {flag.transactionId || flag.referenceId || 'TXN-FLAGGED'}
               </span>
-              <span style={{
-                backgroundColor: scoreTheme.bg,
-                color: scoreTheme.color,
-                border: `1px solid ${scoreTheme.border}`,
-                padding: '3px 10px',
-                borderRadius: '12px',
-                fontSize: '11px',
-                fontWeight: 800
-              }}>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${scoreTheme.bg} ${scoreTheme.color} ${scoreTheme.border}`}>
                 {scoreTheme.tier} ({flag.riskScore}/100)
               </span>
-              <span style={{
-                backgroundColor: '#f1f5f9',
-                color: '#475569',
-                padding: '3px 8px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: 700
-              }}>
+              <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs font-semibold">
                 Status: {flag.status || 'Flagged'}
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-              Evaluation recorded {flag.createdAt ? new Date(flag.createdAt).toLocaleString() : 'Recent'} • Case Reference: <strong>{queueId}</strong>
+            <div className="text-xs text-gray-500 mt-0.5">
+              Evaluation recorded {flag.createdAt ? new Date(flag.createdAt).toLocaleString() : 'Recent'} • Case Ref: <strong>{queueId}</strong>
             </div>
           </div>
         </div>
 
-        {/* Primary Action Button: Open in Analyst Case Detail */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="flex items-center gap-3">
           {txAmount >= 75000 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: '#fef3c7',
-              border: '1px solid #fde68a',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: '#92400e'
-            }}>
-              <ShieldAlert size={15} color="#d97706" />
-              Dual Approval Statutory Gate (&ge; Rs. 75,000)
+            <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-3 py-1 rounded-lg text-xs font-semibold text-amber-800">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              Dual Approval Gate (&ge; Rs. 75,000)
             </div>
           )}
 
           <button
             onClick={handleOpenCaseDetail}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '9px 18px',
-              backgroundColor: '#2563eb',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.35)',
-              transition: 'background-color 0.15s ease'
-            }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
           >
             <span>Open in Analyst Case Detail</span>
-            <ArrowRight size={16} />
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* 2-Column Responsive Layout */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)',
-        gap: '24px',
-        alignItems: 'start'
-      }}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* ============================================================== */}
-        {/* LEFT COLUMN: Dynamic Transaction Details & Geolocation Metrics */}
-        {/* ============================================================== */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {/* LEFT COLUMN: Transaction Details & Geolocation (2 cols) */}
+        <div className="lg:col-span-2 space-y-6">
 
-          {/* Card 1: Dynamic Transaction Parameters */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '16px 20px',
-              backgroundColor: '#f8fafc',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText size={17} color="#2563eb" />
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                  Transaction Parameters (Dynamic)
-                </h3>
+          {/* Transaction Parameters */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden space-y-4 p-6">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <h3 className="text-sm font-bold text-gray-900">Transaction Parameters</h3>
               </div>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>
-                Channel: <strong style={{ color: '#0f172a' }}>{flag.paymentChannel || flag.channel || 'Instant Transfer'}</strong>
+              <span className="text-xs text-gray-500 font-medium">
+                Channel: <strong className="text-gray-900">{flag.paymentChannel || flag.channel || 'Instant Transfer'}</strong>
               </span>
             </div>
 
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-              {/* Amount Highlight Banner */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '14px 18px',
-                backgroundColor: '#f8fafc',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
-                    Evaluated Transaction Value
-                  </div>
-                  <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
-                    Rs. {txAmount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>30-Day Customer Baseline</div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
-                    ~ Rs. {customerBaseline.toLocaleString('en-LK', { minimumFractionDigits: 2 })} (Avg)
-                  </div>
+            <div className="bg-slate-50 border border-gray-200 rounded-lg p-4 flex justify-between items-center">
+              <div>
+                <div className="text-[11px] font-semibold text-gray-500 uppercase">Evaluated Transaction Value</div>
+                <div className="text-2xl font-extrabold text-gray-900 mt-0.5">
+                  Rs. {txAmount.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
                 </div>
               </div>
-
-              {/* Detail Key-Value Grid */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '14px',
-                fontSize: '13px'
-              }}>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Customer Name (Sender)</div>
-                  <div style={{ fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
-                    {flag.customerName || flag.senderName || flag.sender || 'Customer'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    Acc: {flag.senderAccount || flag.senderAccountNumber || (flag.senderWalletId ? `ACC-${flag.senderWalletId}` : 'ACC-00000001')}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Beneficiary / Recipient</div>
-                  <div style={{ fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
-                    {flag.recipientName || flag.counterparty || flag.receiverName || 'Verified Beneficiary'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    Acc: {flag.recipientAccount || flag.recipientAccountNumber || (flag.receiverWalletId ? `ACC-${flag.receiverWalletId}` : 'ACC-RECIPIENT')}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Originating IP Address</div>
-                  <div style={{ fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', marginTop: '2px' }}>
-                    {flag.originIp || '192.168.1.10'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    {flag.ipCity || 'Colombo'}, {flag.ipCountry || 'Sri Lanka'}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Observed Hardware / Device</div>
-                  <div style={{ fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
-                    {flag.device || 'Chrome — Windows 11'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace' }}>
-                    {flag.deviceFingerprint ? `${flag.deviceFingerprint.substring(0, 16)}...` : 'fp-verified'}
-                  </div>
+              <div className="text-right">
+                <div className="text-[11px] font-semibold text-gray-500 uppercase">30-Day Customer Baseline</div>
+                <div className="text-xs font-bold text-gray-700 mt-1">
+                  ~ Rs. {customerBaseline.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
                 </div>
               </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="text-gray-500 block text-[11px]">SENDER</span>
+                <strong className="text-gray-900 text-sm">{flag.customerName || flag.senderName || 'Customer'}</strong>
+                <div className="text-gray-500 font-mono">Acc: {flag.senderAccount || flag.senderAccountNumber || 'ACC-0001'}</div>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-[11px]">BENEFICIARY</span>
+                <strong className="text-gray-900 text-sm">{flag.recipientName || flag.receiverName || 'Recipient'}</strong>
+                <div className="text-gray-500 font-mono">Acc: {flag.recipientAccount || 'ACC-RECIPIENT'}</div>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-[11px]">ORIGIN IP</span>
+                <code className="text-blue-600 font-bold">{flag.originIp || '192.168.1.10'}</code>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-[11px]">DEVICE SESSION</span>
+                <span className="font-semibold text-gray-900">{flag.device || 'Chrome — Windows 11'}</span>
+              </div>
             </div>
           </div>
 
-          {/* Card 2: Tabular Geolocation Delta Metrics (Map Removed as instructed) */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '16px 20px',
-              backgroundColor: '#f8fafc',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MapPin size={17} color={isDistanceAnomaly ? '#dc2626' : '#2563eb'} />
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                  Tabular Geolocation Delta Metrics
-                </h3>
+          {/* Geolocation Table */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden space-y-4 p-6">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <MapPin className={`w-4 h-4 ${isDistanceAnomaly ? 'text-red-600' : 'text-blue-600'}`} />
+                <h3 className="text-sm font-bold text-gray-900">Geolocation Delta Metrics</h3>
               </div>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: isDistanceAnomaly ? '#b91c1c' : '#15803d',
-                backgroundColor: isDistanceAnomaly ? '#fee2e2' : '#dcfce7',
-                padding: '2px 8px',
-                borderRadius: '12px'
-              }}>
-                {isDistanceAnomaly ? 'High Spatial Anomaly' : 'Normal Proximity'}
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                isDistanceAnomaly ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              }`}>
+                {isDistanceAnomaly ? 'Spatial Anomaly' : 'Normal Proximity'}
               </span>
             </div>
 
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-              {/* Distance Delta Alert Banner */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                backgroundColor: isDistanceAnomaly ? '#fef2f2' : '#f0fdf4',
-                border: `1px solid ${isDistanceAnomaly ? '#fca5a5' : '#bbf7d0'}`
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Radio size={20} color={isDistanceAnomaly ? '#dc2626' : '#16a34a'} />
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: isDistanceAnomaly ? '#991b1b' : '#166534' }}>
-                      Distance Delta: {distanceKm.toLocaleString()} km
-                    </div>
-                    <div style={{ fontSize: '11px', color: isDistanceAnomaly ? '#b91c1c' : '#15803d' }}>
-                      {distanceKm > 100
-                        ? `Transaction IP (${flag.ipCity || 'Unknown City'}) deviates ${distanceKm}km from registered location (${flag.homeLocation || 'Colombo'})`
-                        : `Transaction initiated within normal user operational radius`}
-                    </div>
+            <div className="p-3 bg-slate-50 border border-gray-200 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Radio className={`w-5 h-5 ${isDistanceAnomaly ? 'text-red-600' : 'text-emerald-600'}`} />
+                <div>
+                  <div className="text-xs font-bold text-gray-900">Distance Delta: {distanceKm.toLocaleString()} km</div>
+                  <div className="text-[11px] text-gray-500">
+                    {isDistanceAnomaly ? `IP location deviates ${distanceKm}km from registered location (${flag.homeLocation || 'Colombo'})` : 'Origin IP within normal radius'}
                   </div>
                 </div>
-
-                <div style={{
-                  backgroundColor: '#fff',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  color: isDistanceAnomaly ? '#dc2626' : '#16a34a',
-                  border: '1px solid #e2e8f0'
-                }}>
-                  {distanceKm > 100 ? '+32 PTS RISK' : '+0 PTS'}
-                </div>
               </div>
+              <span className="text-xs font-extrabold px-2 py-0.5 rounded bg-white border border-gray-200 text-gray-900">
+                {isDistanceAnomaly ? '+32 PTS RISK' : '+0 PTS'}
+              </span>
+            </div>
 
-              {/* Structured Comparison Table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Parameter</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Customer Registered Profile</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Observed Transaction Origin</th>
-                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Variance / Delta</th>
+                  <tr className="bg-slate-50 border-b border-gray-200 text-gray-500 font-semibold uppercase">
+                    <th className="p-3">Parameter</th>
+                    <th className="p-3">Registered Profile</th>
+                    <th className="p-3">Observed Origin</th>
+                    <th className="p-3">Variance</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#334155' }}>City / Region</td>
-                    <td style={{ padding: '10px 12px', color: '#0f172a' }}>{flag.homeLocation || 'Colombo, Western Province'}</td>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: isDistanceAnomaly ? '#dc2626' : '#0f172a' }}>
-                      {flag.ipCity || 'Jaffna'}, {flag.ipCountry || 'Sri Lanka'}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: isDistanceAnomaly ? '#dc2626' : '#16a34a', fontWeight: 700 }}>
-                      {distanceKm} km delta
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#334155' }}>IP Address</td>
-                    <td style={{ padding: '10px 12px', color: '#64748b' }}>Registered Subnets</td>
-                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#0f172a' }}>{flag.originIp || '203.143.88.71'}</td>
-                    <td style={{ padding: '10px 12px', color: isDistanceAnomaly ? '#d97706' : '#64748b' }}>Unseen IP Block</td>
-                  </tr>
+                <tbody className="divide-y divide-gray-100">
                   <tr>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#334155' }}>Coordinates</td>
-                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#64748b' }}>
-                      {flag.homeLatitude || 6.9271}, {flag.homeLongitude || 79.8612}
-                    </td>
-                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#0f172a' }}>
-                      {flag.latitude || 9.6615}, {flag.longitude || 80.0255}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#64748b' }}>Lat/Lng Delta Verified</td>
+                    <td className="p-3 font-semibold text-gray-800">City / Region</td>
+                    <td className="p-3 text-gray-600">{flag.homeLocation || 'Colombo'}</td>
+                    <td className="p-3 font-semibold text-gray-900">{flag.ipCity || 'Jaffna'}</td>
+                    <td className={`p-3 font-bold ${isDistanceAnomaly ? 'text-red-600' : 'text-emerald-600'}`}>{distanceKm} km delta</td>
                   </tr>
                 </tbody>
               </table>
-
             </div>
           </div>
 
         </div>
 
-        {/* ============================================================== */}
-        {/* RIGHT COLUMN: Composite Score Breakdown & Case Detail Link     */}
-        {/* ============================================================== */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {/* RIGHT COLUMN: Composite Score & Gateway (1 col) */}
+        <div className="space-y-6">
 
-          {/* Card 3: Composite Score Breakdown */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '16px 20px',
-              backgroundColor: '#f8fafc',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Activity size={17} color="#2563eb" />
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                  Composite Score Breakdown
-                </h3>
+          {/* Composite Score Card */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+              <Activity className="w-4 h-4 text-blue-600" /> Composite Score Breakdown
+            </h3>
+
+            <div className={`p-4 rounded-lg border ${scoreTheme.bg} ${scoreTheme.border} space-y-3`}>
+              <div className="flex justify-between items-baseline">
+                <div>
+                  <div className={`text-[11px] font-bold ${scoreTheme.color} uppercase`}>Risk Score</div>
+                  <div className={`text-3xl font-extrabold ${scoreTheme.color}`}>{flag.riskScore}/100</div>
+                </div>
+                <div className={`text-xs font-bold ${scoreTheme.color}`}>{scoreTheme.tier}</div>
               </div>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>
-                Engine Gate: <strong style={{ color: '#0f172a' }}>50–69 Hold | &ge;70 Case</strong>
-              </span>
+
+              <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className={`h-full ${scoreTheme.fill}`} style={{ width: `${Math.min(100, flag.riskScore)}%` }} />
+              </div>
             </div>
 
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-              {/* Progress Bar Visualizer */}
-              <div style={{
-                padding: '18px 20px',
-                backgroundColor: scoreTheme.bg,
-                borderRadius: '10px',
-                border: `1px solid ${scoreTheme.border}`
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+            <div className="space-y-2">
+              <div className="text-xs font-bold text-gray-900">Triggered Rules Impact</div>
+              {dynamicRules.map((rule, idx) => (
+                <div key={idx} className="p-3 rounded-lg bg-slate-50 border border-gray-200 text-xs flex justify-between items-start gap-2">
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: scoreTheme.color, letterSpacing: '0.5px' }}>
-                      COMPOSITE FRAUD RISK SCORE
-                    </div>
-                    <div style={{ fontSize: '32px', fontWeight: 900, color: scoreTheme.color, lineHeight: 1.1 }}>
-                      {flag.riskScore} <span style={{ fontSize: '16px', fontWeight: 700, opacity: 0.8 }}>/ 100</span>
-                    </div>
+                    <div className="font-bold text-gray-900">{rule.label}</div>
+                    <div className="text-[11px] text-gray-500 mt-0.5">{rule.description}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: scoreTheme.color }}>
-                      {scoreTheme.tier}
-                    </div>
-                    <div style={{ fontSize: '11px', color: scoreTheme.color, opacity: 0.9 }}>
-                      {flag.riskScore >= 70 ? 'Escalated to Analyst' : flag.riskScore >= 50 ? 'Step-Up Held' : 'Auto Approved'}
-                    </div>
-                  </div>
+                  <span className="font-extrabold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full shrink-0">
+                    +{rule.points} pts
+                  </span>
                 </div>
-
-                <div style={{ width: '100%', height: '10px', backgroundColor: '#e2e8f0', borderRadius: '5px', overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      width: `${Math.min(flag.riskScore, 100)}%`,
-                      height: '100%',
-                      backgroundColor: scoreTheme.color,
-                      borderRadius: '5px',
-                      transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '10px', color: '#64748b', fontWeight: 600 }}>
-                  <span>0 (Safe)</span>
-                  <span>50 (Step-Up Challenge)</span>
-                  <span>70 (Analyst Review)</span>
-                  <span>100 (Critical)</span>
-                </div>
-              </div>
-
-              {/* Contributed Points List */}
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' }}>
-                  Points Contributed by Triggered Rules
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {dynamicRules.map((rule, idx) => {
-                    const isHigh = rule.points >= 30;
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          justifyContent: 'space-between',
-                          padding: '12px 14px',
-                          backgroundColor: '#f8fafc',
-                          borderRadius: '8px',
-                          border: '1px solid #e2e8f0',
-                          gap: '12px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: isHigh ? '#dc2626' : '#f59e0b',
-                            marginTop: '5px',
-                            flexShrink: 0
-                          }} />
-                          <div>
-                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                              {rule.label}
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', lineHeight: 1.4 }}>
-                              {rule.description}
-                            </div>
-                          </div>
-                        </div>
-
-                        <span style={{
-                          fontWeight: 900,
-                          fontSize: '12px',
-                          color: isHigh ? '#b91c1c' : '#b45309',
-                          backgroundColor: isHigh ? '#fee2e2' : '#fef3c7',
-                          border: `1px solid ${isHigh ? '#fca5a5' : '#fde68a'}`,
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          +{rule.points} pts
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
+              ))}
             </div>
           </div>
 
-          {/* Card 4: Direct Navigation Link to Student 3's Analyst Case Detail Workspace */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '16px 20px',
-              backgroundColor: '#f8fafc',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <CheckCircle2 size={17} color="#2563eb" />
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                Analyst Case Resolution Gateway
-              </h3>
-            </div>
-
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
-                Human analyst decisions (Approve, Reject, Request Info, Maker-Checker Dual Approvals) are strictly
-                managed in <strong>Student 3's Case Detail &amp; Adjudication workspace</strong> to maintain segregation of duties.
-              </p>
-
-              <div style={{
-                padding: '12px 14px',
-                backgroundColor: '#eff6ff',
-                borderRadius: '8px',
-                border: '1px solid #bfdbfe',
-                fontSize: '12px',
-                color: '#1e40af',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <ExternalLink size={16} color="#2563eb" />
-                <span>Case Reference ID: <strong>{queueId}</strong></span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleOpenCaseDetail}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '13px 20px',
-                  backgroundColor: '#2563eb',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <span>Open in Analyst Case Detail →</span>
-              </button>
-            </div>
+          {/* Action Gateway */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-blue-600" /> Resolution Gateway
+            </h3>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Adjudicate decisions, record mandatory notes, or execute maker-checker dual approvals in the Case Detail workspace.
+            </p>
+            <button
+              onClick={handleOpenCaseDetail}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 text-xs rounded-lg shadow-sm transition-colors cursor-pointer"
+            >
+              Open in Analyst Case Detail →
+            </button>
           </div>
 
         </div>

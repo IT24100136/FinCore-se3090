@@ -3,13 +3,13 @@ import {
   Search, 
   Bell, 
   RefreshCw, 
-  ShieldAlert, 
-  CheckCircle2, 
-  Sparkles,
-  Clock
+  Clock,
+  Sparkles
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Header({ activeView, searchQuery, setSearchQuery, onRefresh, isRefreshing }) {
+  const { user } = useAuth();
   const [currentTime, setCurrentTime] = useState('');
 
   useEffect(() => {
@@ -44,46 +44,64 @@ export default function Header({ activeView, searchQuery, setSearchQuery, onRefr
   };
 
   return (
-    <header className="bg-white border-b border-slate-200/80 px-8 py-4 shadow-sm sticky top-0 z-20">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <header className="h-14 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between sticky top-0 z-20">
+      <div className="flex items-center justify-between w-full gap-4">
         {/* Welcome Greeting & Active View Title */}
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight font-sans">
-              Welcome, Admin
+            <h1 className="text-base font-bold text-white tracking-tight font-sans">
+              {getViewTitle()}
             </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-              <Sparkles className="w-3 h-3 text-blue-600" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
+              <Sparkles className="w-3 h-3 text-sky-400" />
               FinCore v2.4 Live
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-            <span className="font-medium text-slate-700">{getViewTitle()}</span>
-            <span className="text-slate-300">•</span>
-            <span>iOS & FinTech Operations Console</span>
-          </p>
         </div>
 
         {/* Action Controls & Search */}
         <div className="flex items-center gap-3">
           {/* Global Search Bar */}
-          <div className="relative w-64 md:w-72">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="relative w-64">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search users, IPs, fingerprints..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-100/80 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
               >
                 ✕
               </button>
             )}
+          </div>
+
+          {/* Status Pills */}
+          <div className="hidden md:flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 bg-sky-950/60 border border-sky-500/30 px-3 py-1 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.2)]">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+              Live Production
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.2)]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              AI Pipeline: Operational
+            </div>
+          </div>
+
+          {/* User Badge */}
+          <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700/60">
+            <span className="text-xs font-semibold text-slate-200">
+              {user?.fullName || 'Admin'}
+            </span>
+            <span className="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold text-[10px] px-2 py-0.5 rounded-full">
+              {user?.role?.toUpperCase() || 'ADMIN'}
+            </span>
           </div>
 
           {/* Refresh Button */}
@@ -91,32 +109,9 @@ export default function Header({ activeView, searchQuery, setSearchQuery, onRefr
             onClick={onRefresh}
             disabled={isRefreshing}
             title="Refresh Real-time Data"
-            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-blue-600 transition-colors shadow-sm disabled:opacity-50"
+            className="p-1.5 rounded-lg border border-slate-800 bg-slate-950/80 hover:bg-slate-800 text-slate-300 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
-          </button>
-
-          {/* System Time Pill */}
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-mono shadow-sm">
-            <Clock className="w-3.5 h-3.5 text-blue-400" />
-            <span>{currentTime || '12:00:00'}</span>
-          </div>
-
-          {/* System Live Operational Status */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-medium shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span>Live</span>
-          </div>
-
-          {/* Notifications Bell Button */}
-          <button 
-            title="System Alerts"
-            className="relative p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors shadow-sm"
-          >
-            <Bell className="w-4 h-4 text-slate-700" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
-              3
-            </span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-400' : ''}`} />
           </button>
         </div>
       </div>

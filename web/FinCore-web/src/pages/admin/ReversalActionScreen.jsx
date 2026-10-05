@@ -1,22 +1,18 @@
 import React, { useState } from 'react';
+import { AlertTriangle, CheckCircle2, X, RotateCcw } from 'lucide-react';
 
-// A simple local Toast notification component to avoid external dependencies
 const Toast = ({ message, type }) => (
-  <div className={`absolute top-4 right-4 px-4 py-3 rounded-lg shadow-lg border flex items-center space-x-2 animate-fade-in-down ${
+  <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl border flex items-center space-x-2 animate-in slide-in-from-top-4 duration-200 ${
     type === 'success' 
-      ? 'bg-emerald-900/90 border-emerald-500/50 text-emerald-100' 
-      : 'bg-rose-900/90 border-rose-500/50 text-rose-100'
+      ? 'bg-emerald-900 text-emerald-100 border-emerald-700' 
+      : 'bg-rose-900 text-rose-100 border-rose-700'
   }`}>
     {type === 'success' ? (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-      </svg>
+      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
     ) : (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+      <AlertTriangle className="w-5 h-5 text-rose-400" />
     )}
-    <span className="font-medium text-sm">{message}</span>
+    <span className="font-medium text-xs">{message}</span>
   </div>
 );
 
@@ -31,12 +27,10 @@ const ReversalActionScreen = ({ transaction, onClose, onSuccess }) => {
     setToast(null);
 
     try {
-      // The API call to the ASP.NET Core backend
       const token = localStorage.getItem('token');
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      // Use dbId for real API calls, fallback to mock id
       const targetId = transaction.dbId || transaction.id.replace('TXN-', ''); 
 
       const response = await fetch(`/api/transactions/${targetId}/reverse`, {
@@ -50,15 +44,13 @@ const ReversalActionScreen = ({ transaction, onClose, onSuccess }) => {
         throw new Error(errData.message || 'Reversal failed');
       }
 
-      // Mock delay for UI demonstration
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 1200));
       
       setToast({ message: `Transaction ${transaction.id} successfully reversed.`, type: 'success' });
       
-      // Close modal and refresh list after a short delay
       setTimeout(() => {
         onSuccess();
-      }, 1500);
+      }, 1200);
 
     } catch (error) {
       console.error(error);
@@ -70,61 +62,69 @@ const ReversalActionScreen = ({ transaction, onClose, onSuccess }) => {
   const isAlreadyReversed = transaction.status === 'Reversed';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       {toast && <Toast message={toast.message} type={toast.type} />}
       
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-scale-up">
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="bg-slate-800/50 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-            <svg className="w-5 h-5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            Transaction Action Required
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Transaction Reversal
+              </h2>
+              <p className="text-xs text-slate-500">Maker-Checker Financial Reversal Confirmation</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6">
-          <div className="bg-slate-950/50 rounded-xl p-5 border border-slate-800/50">
-            <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+        <div className="p-6 space-y-5">
+          <div className="bg-slate-50/80 rounded-xl p-4 border border-slate-200/80">
+            <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-xs">
               <div>
-                <p className="text-slate-500 uppercase tracking-wider text-xs font-semibold mb-1">Transaction ID</p>
-                <p className="text-slate-200 font-mono">{transaction.id}</p>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-1">Transaction ID</p>
+                <p className="text-slate-900 font-mono font-bold">{transaction.id}</p>
               </div>
               <div>
-                <p className="text-slate-500 uppercase tracking-wider text-xs font-semibold mb-1">Status</p>
-                <p className={`font-medium ${isAlreadyReversed ? 'text-rose-400' : 'text-amber-400'}`}>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-1">Status</p>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                  isAlreadyReversed ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
                   {transaction.status}
-                </p>
+                </span>
               </div>
               <div>
-                <p className="text-slate-500 uppercase tracking-wider text-xs font-semibold mb-1">Sender</p>
-                <p className="text-slate-200 font-medium">{transaction.sender}</p>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-1">Sender</p>
+                <p className="text-slate-800 font-semibold">{transaction.sender}</p>
               </div>
               <div>
-                <p className="text-slate-500 uppercase tracking-wider text-xs font-semibold mb-1">Receiver</p>
-                <p className="text-slate-200 font-medium">{transaction.receiver}</p>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-1">Receiver</p>
+                <p className="text-slate-800 font-semibold">{transaction.receiver}</p>
               </div>
               <div>
-                <p className="text-slate-500 uppercase tracking-wider text-xs font-semibold mb-1">Date & Time</p>
-                <p className="text-slate-300">{new Date(transaction.timestamp).toLocaleString()}</p>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-1">Date & Time</p>
+                <p className="text-slate-600 font-medium">{new Date(transaction.timestamp).toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-slate-500 uppercase tracking-wider text-xs font-semibold mb-1">Risk Score</p>
+                <p className="text-slate-500 uppercase tracking-wider text-[10px] font-bold mb-1">Risk Score</p>
                 <div className="flex items-center space-x-2">
-                  <div className="w-full bg-slate-800 rounded-full h-2 max-w-[80px]">
+                  <div className="w-full bg-slate-200 rounded-full h-2 max-w-[80px] overflow-hidden">
                     <div 
                       className={`h-2 rounded-full ${transaction.riskScore > 80 ? 'bg-rose-500' : transaction.riskScore > 40 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
                       style={{ width: `${transaction.riskScore}%` }}
                     ></div>
                   </div>
-                  <span className={`font-bold ${transaction.riskScore > 80 ? 'text-rose-400' : 'text-slate-200'}`}>
+                  <span className={`font-bold ${transaction.riskScore > 80 ? 'text-rose-600' : 'text-slate-700'}`}>
                     {transaction.riskScore}/100
                   </span>
                 </div>
@@ -132,20 +132,20 @@ const ReversalActionScreen = ({ transaction, onClose, onSuccess }) => {
             </div>
           </div>
 
-          <div className="bg-slate-900 border-l-4 border-blue-500 p-4 rounded-r-lg">
-            <h3 className="text-blue-400 font-semibold text-sm mb-1">Amount to Reverse</h3>
-            <p className="text-2xl font-bold text-slate-100">
+          <div className="bg-blue-50/80 border-l-4 border-blue-600 p-4 rounded-r-xl border border-blue-100">
+            <h3 className="text-blue-900 font-bold text-xs uppercase tracking-wider mb-0.5">Amount to Reverse</h3>
+            <p className="text-2xl font-extrabold text-blue-950 font-sans tracking-tight">
               {transaction.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} LKR
             </p>
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="bg-slate-800/30 px-6 py-4 border-t border-slate-700 flex justify-end space-x-3">
+        <div className="bg-slate-50/80 px-6 py-4 border-t border-slate-200 flex justify-end space-x-3">
           <button 
             onClick={onClose}
             disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-600 transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -153,21 +153,24 @@ const ReversalActionScreen = ({ transaction, onClose, onSuccess }) => {
           <button 
             onClick={handleReversal}
             disabled={isSubmitting || isAlreadyReversed}
-            className={`px-5 py-2.5 rounded-lg text-sm font-bold shadow-lg transition-all flex items-center justify-center min-w-[180px] ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 ${
               isAlreadyReversed 
-                ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
-                : 'bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white border-t border-rose-400/30'
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-rose-600 hover:bg-rose-700 text-white border border-rose-600'
             }`}
           >
             {isSubmitting ? (
               <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 <span>Processing...</span>
               </div>
             ) : isAlreadyReversed ? (
               'Already Reversed'
             ) : (
-              'Confirm Reversal'
+              <>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Confirm Reversal</span>
+              </>
             )}
           </button>
         </div>

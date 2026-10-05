@@ -7,11 +7,11 @@ import {
   Layers,
   BarChart3,
   LogOut,
-  UserCheck,
   Building,
-  KeyRound,
   RotateCcw,
   FileCheck2,
+  Bell,
+  Search
 } from 'lucide-react';
 
 export default function AppNavbar() {
@@ -26,185 +26,105 @@ export default function AppNavbar() {
   }
 
   const isAdmin = user?.role === 'Admin';
-  const roleColor = isAdmin ? '#818cf8' : '#34d399';
-  const roleBg = isAdmin ? 'rgba(99, 102, 241, 0.15)' : 'rgba(16, 185, 129, 0.15)';
-  const roleBorder = isAdmin ? 'rgba(99, 102, 241, 0.3)' : 'rgba(16, 185, 129, 0.3)';
 
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
   };
 
-  const navLinkStyle = ({ isActive }) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 14px',
-    borderRadius: '8px',
-    fontSize: '0.85rem',
-    fontWeight: isActive ? '600' : '500',
-    color: isActive ? '#38bdf8' : '#94a3b8',
-    backgroundColor: isActive ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
-    border: isActive ? '1px solid rgba(56, 189, 248, 0.25)' : '1px solid transparent',
-    textDecoration: 'none',
-    transition: 'all 0.15s ease',
-  });
+  const getNavLinkClass = ({ isActive }) =>
+    `flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+      isActive
+        ? 'bg-blue-600 text-white font-semibold shadow-sm'
+        : 'text-slate-300 hover:bg-slate-800 hover:text-white font-medium'
+    }`;
 
   return (
-    <header style={{
-      height: '64px',
-      backgroundColor: '#0a0f1d',
-      borderBottom: '1px solid #1e293b',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0 1.5rem',
-      position: 'sticky',
-      top: 0,
-      zIndex: 100,
-      boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.5)',
-    }}>
-      {/* Left: Brand & Title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+    <header className="h-14 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between sticky top-0 z-50 shadow-md">
+      {/* Left: Brand & Navigation */}
+      <div className="flex items-center gap-6">
         <div
           onClick={() => navigate(isAdmin ? '/admin/dashboard' : '/analyst/review-queue')}
-          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          className="flex items-center gap-2.5 cursor-pointer group"
         >
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 15px rgba(14, 165, 233, 0.4)',
-          }}>
-            <Shield size={20} color="#fff" />
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-extrabold text-sm shadow-sm shadow-blue-500/30 group-hover:bg-blue-500 transition-colors">
+            FC
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.1rem', fontWeight: '800', letterSpacing: '-0.02em', color: '#f8fafc' }}>
-                FinCore
-              </span>
-              <span style={{
-                fontSize: '10px',
-                fontWeight: '700',
-                letterSpacing: '0.08em',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                color: '#38bdf8',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-              }}>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white tracking-tight">FinCore</span>
+              <span className="px-1.5 py-0.5 text-[9px] font-bold tracking-wider rounded bg-sky-500/20 text-sky-400 border border-sky-500/30">
                 STAFF PORTAL
               </span>
             </div>
-            <div style={{ fontSize: '11px', color: '#64748b' }}>
-              Institutional Fraud Defense Suite
+            <div className="text-[10px] font-medium text-slate-400 tracking-wide">
+              FRAUD INTELLIGENCE
             </div>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '1rem' }}>
+        <nav className="flex items-center gap-1.5 ml-2">
           {isAdmin ? (
             <>
-              <NavLink to="/admin/dashboard" style={navLinkStyle}>
-                <Activity size={16} /> Admin Command Center
+              <NavLink to="/admin/dashboard" className={getNavLinkClass}>
+                <Activity className="w-4 h-4" /> Admin Console
               </NavLink>
-              <NavLink to="/analyst/review-queue" style={navLinkStyle}>
-                <Layers size={16} /> Analyst Queue
+              <NavLink to="/analyst/review-queue" className={getNavLinkClass}>
+                <Layers className="w-4 h-4" /> Analyst Queue
               </NavLink>
-              <NavLink to="/analyst/history" style={navLinkStyle}>
-                <FileCheck2 size={16} /> Audit Trail &amp; History
+              <NavLink to="/analyst/history" className={getNavLinkClass}>
+                <FileCheck2 className="w-4 h-4" /> Audit Trail
               </NavLink>
-              <NavLink to="/admin/reversals" style={navLinkStyle}>
-                <RotateCcw size={16} /> Reversal Action
+              <NavLink to="/admin/reversals" className={getNavLinkClass}>
+                <RotateCcw className="w-4 h-4" /> Reversal Action
               </NavLink>
-              <NavLink to="/admin/analytics" style={navLinkStyle}>
-                <BarChart3 size={16} /> Analytics
+              <NavLink to="/admin/analytics" className={getNavLinkClass}>
+                <BarChart3 className="w-4 h-4" /> Analytics
               </NavLink>
             </>
           ) : (
             <>
-              <NavLink to="/analyst/review-queue" style={navLinkStyle}>
-                <Layers size={16} /> Analyst Review Queue
+              <NavLink to="/analyst/review-queue" className={getNavLinkClass}>
+                <Layers className="w-4 h-4" /> Review Queue
               </NavLink>
-              <NavLink to="/analyst/history" style={navLinkStyle}>
-                <FileCheck2 size={16} /> Audit Trail &amp; History
+              <NavLink to="/analyst/history" className={getNavLinkClass}>
+                <FileCheck2 className="w-4 h-4" /> Audit Trail &amp; History
               </NavLink>
             </>
           )}
         </nav>
       </div>
 
-      {/* Right: Staff Identity & Profile */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        {/* Department Tag */}
-        {user?.department && (
-          <div style={{
-            display: 'none',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '11px',
-            color: '#94a3b8',
-            backgroundColor: '#0f172a',
-            padding: '5px 10px',
-            borderRadius: '6px',
-            border: '1px solid #1e293b',
-          }} className="md:flex">
-            <Building size={13} color="#64748b" />
-            <span>{user.department}</span>
+      {/* Right: Status Pills & Profile */}
+      <div className="flex items-center gap-4">
+        {/* Status Pills */}
+        <div className="hidden md:flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-400 bg-sky-950/60 border border-sky-500/30 px-3 py-1 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.2)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+            Live Production
           </div>
-        )}
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.2)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            AI Pipeline: Operational
+          </div>
+        </div>
 
-        {/* Staff User Card */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          padding: '4px 12px 4px 6px',
-          backgroundColor: '#0f172a',
-          borderRadius: '30px',
-          border: '1px solid #1e293b',
-        }}>
-          {/* Avatar with Role Initial */}
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            backgroundColor: roleBg,
-            border: `1.5px solid ${roleBorder}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-            fontWeight: '700',
-            color: roleColor,
-          }}>
+        {/* User Badge */}
+        <div className="flex items-center gap-2.5 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700/60">
+          <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
             {user?.fullName ? user.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase() : 'ST'}
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '12px', fontWeight: '600', color: '#f1f5f9' }}>
-                {user?.fullName || 'Staff Member'}
-              </span>
-              <span style={{
-                fontSize: '9px',
-                fontWeight: '700',
-                padding: '1px 6px',
-                borderRadius: '10px',
-                backgroundColor: roleBg,
-                color: roleColor,
-                border: `1px solid ${roleBorder}`,
-              }}>
-                {user?.role?.toUpperCase() || 'STAFF'}
-              </span>
-            </div>
-            <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>
-              {user?.employeeId ? `BADGE: ${user.employeeId}` : (user?.email || '')}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-100">
+              {user?.fullName || 'Staff Member'}
+            </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              isAdmin
+                ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+                : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            }`}>
+              {user?.role?.toUpperCase() || 'ANALYST'}
             </span>
           </div>
         </div>
@@ -213,30 +133,9 @@ export default function AppNavbar() {
         <button
           onClick={handleLogout}
           title="Sign out of FinCore"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 12px',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            color: '#f87171',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-            borderRadius: '8px',
-            fontSize: '12px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
-          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-400 bg-rose-950/40 border border-rose-500/30 hover:bg-rose-900/60 transition-colors cursor-pointer"
         >
-          <LogOut size={14} />
+          <LogOut className="w-3.5 h-3.5" />
           <span>Sign Out</span>
         </button>
       </div>

@@ -3,29 +3,17 @@ import { fraudService } from '../../services/fraudService';
 import { useAuth } from '../../context/AuthContext';
 import {
   Sliders,
-  PlusCircle,
   RotateCcw,
   Check,
   AlertCircle,
   Search,
-  Filter,
   CheckCircle2,
-  XCircle,
-  ToggleLeft,
-  ToggleRight,
   Edit2,
   Trash2,
-  ShieldCheck,
-  HelpCircle,
-  ArrowUpDown,
   RefreshCw,
-  Sparkles,
   Lock,
   History,
-  FileText,
-  Clock,
-  Eye,
-  ShieldAlert
+  Eye
 } from 'lucide-react';
 
 const SIGNAL_CATEGORIES = [
@@ -45,7 +33,7 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
   const [panelTab, setPanelTab] = useState('rules'); // 'rules' | 'audit'
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', message: string }
+  const [feedback, setFeedback] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [editingRuleId, setEditingRuleId] = useState(null);
@@ -106,7 +94,6 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
       errors.ruleName = 'Rule Name must be at least 3 characters.';
     }
 
-    // Task 2: "Device Fingerprint" acts as a boolean toggle - bypass numeric threshold validation
     if (form.signalCategory !== 'Device Fingerprint') {
       if (form.thresholdValue === '' || isNaN(Number(form.thresholdValue))) {
         errors.thresholdValue = 'A valid numeric threshold is required.';
@@ -127,7 +114,6 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
   const handleInputChange = (field, value) => {
     setForm(prev => {
       const updated = { ...prev, [field]: value };
-      // Task 2: Dynamic threshold values and units based on Signal Category
       if (field === 'signalCategory') {
         if (value === 'Transaction Amount') {
           updated.thresholdUnit = 'Rs.';
@@ -177,7 +163,6 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
     setLoading(true);
     try {
       if (editingRuleId) {
-        // Update existing rule
         await fraudService.updateRule(editingRuleId, {
           ruleName: form.ruleName,
           signalCategory: form.signalCategory,
@@ -189,7 +174,6 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
         });
         setFeedback({ type: 'success', message: `Rule "${form.ruleName}" updated successfully.` });
       } else {
-        // Create new rule
         const created = await fraudService.createRule({
           ruleName: form.ruleName,
           signalCategory: form.signalCategory,
@@ -257,7 +241,6 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
     }
   };
 
-  // Filtered Rules
   const filteredRules = rules.filter(r => {
     if (categoryFilter !== 'ALL' && r.signalCategory !== categoryFilter) return false;
     if (searchQuery.trim()) {
@@ -272,1223 +255,358 @@ export default function RuleConfigurationPanel({ onRuleChanged }) {
     return true;
   });
 
-  const getScoreWeightBadge = (weight) => {
-    if (weight >= 45) return { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5', label: 'High Impact' };
-    if (weight >= 25) return { bg: '#fef3c7', text: '#b45309', border: '#fcd34d', label: 'Medium Impact' };
-    return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd', label: 'Low Impact' };
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="space-y-6 font-sans text-gray-900">
 
       {/* Header bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, letterSpacing: '0.4px', marginBottom: '4px' }}>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
             FRAUD ENGINE &gt; RULES CONFIGURATION
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Sliders size={24} color="#2563eb" /> Rule Configuration Panel
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+            <Sliders className="w-6 h-6 text-blue-600" /> Rule Configuration Panel
           </h1>
-          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
+          <p className="text-gray-500 text-xs mt-1">
             Configure active real-time transaction heuristics, risk point weights, and automated threshold limits.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="flex items-center gap-2">
           <button
             onClick={loadRules}
             disabled={loading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              backgroundColor: '#fff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#334155',
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-slate-50 shadow-sm transition-colors cursor-pointer"
           >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh Rules
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Rules
           </button>
         </div>
       </div>
 
-      {/* Feedback Alert Banner */}
+      {/* Feedback Banner */}
       {feedback && (
-        <div style={{
-          padding: '12px 18px',
-          borderRadius: '8px',
-          backgroundColor: feedback.type === 'success' ? '#dcfce7' : '#fee2e2',
-          border: `1px solid ${feedback.type === 'success' ? '#86efac' : '#fca5a5'}`,
-          color: feedback.type === 'success' ? '#166534' : '#991b1b',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '13px',
-          fontWeight: 600
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {feedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            {feedback.message}
+        <div className={`p-4 rounded-lg border text-xs font-semibold flex items-center justify-between shadow-sm ${
+          feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {feedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-red-600" />}
+            <span>{feedback.message}</span>
           </div>
-          <button
-            onClick={() => setFeedback(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: 'inherit' }}
-          >
+          <button onClick={() => setFeedback(null)} className="text-gray-400 hover:text-gray-600 font-bold">
             ✕
           </button>
         </div>
       )}
 
-      {/* Top Tab Switcher: Rules vs Rule Audit Log */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '2px' }}>
+      {/* Tabs: Rules vs Audit */}
+      <div className="flex items-center gap-2 border-b border-gray-200">
         <button
           onClick={() => setPanelTab('rules')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            fontSize: '13px',
-            fontWeight: 700,
-            border: 'none',
-            backgroundColor: 'transparent',
-            color: panelTab === 'rules' ? '#2563eb' : '#64748b',
-            borderBottom: panelTab === 'rules' ? '2px solid #2563eb' : '2px solid transparent',
-            cursor: 'pointer'
-          }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+            panelTab === 'rules'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
         >
-          <Sliders size={16} /> Active Fraud Rules ({rules.length})
+          <Sliders className="w-4 h-4" /> Active Fraud Rules ({rules.length})
         </button>
         <button
           onClick={() => {
             setPanelTab('audit');
             loadAuditLogs();
           }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 18px',
-            fontSize: '13px',
-            fontWeight: 700,
-            border: 'none',
-            backgroundColor: 'transparent',
-            color: panelTab === 'audit' ? '#2563eb' : '#64748b',
-            borderBottom: panelTab === 'audit' ? '2px solid #2563eb' : '2px solid transparent',
-            cursor: 'pointer'
-          }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+            panelTab === 'audit'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
         >
-          <History size={16} /> Rule Audit Log & Change History
+          <History className="w-4 h-4" /> Rule Audit Log
         </button>
       </div>
 
-      {/* Analyst Read-Only Alert Banner if not Admin */}
       {!isAdmin && (
-        <div style={{
-          padding: '10px 16px',
-          backgroundColor: '#eff6ff',
-          border: '1px solid #bfdbfe',
-          borderRadius: '8px',
-          color: '#1e40af',
-          fontSize: '12px',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <Lock size={15} />
-          <span>Analyst Read-Only Mode: You have inspection access. Modifying thresholds, creating, or deleting rules requires Administrator privileges.</span>
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-800 flex items-center gap-2">
+          <Lock className="w-4 h-4 text-blue-600" />
+          <span>Analyst Read-Only Mode: Modifying thresholds or creating rules requires Administrator privileges.</span>
         </div>
       )}
 
-      {/* VIEW: AUDIT LOGS */}
+      {/* AUDIT TAB */}
       {panelTab === 'audit' && (
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            padding: '16px 20px',
-            backgroundColor: '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden space-y-4 p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <History size={18} color="#2563eb" /> Rule Mutation Audit Trail (Section 6)
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <History className="w-4 h-4 text-blue-600" /> Rule Mutation Audit Trail
               </h3>
-              <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                Immutable historical logs recording who modified which rule threshold, with before & after state values.
-              </p>
+              <p className="text-xs text-gray-500 mt-0.5">Immutable historical logs recording rule threshold changes.</p>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ position: 'relative' }}>
-                <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '9px' }} />
-                <input
-                  type="text"
-                  placeholder="Filter audit logs..."
-                  value={auditSearch}
-                  onChange={(e) => setAuditSearch(e.target.value)}
-                  style={{
-                    padding: '7px 12px 7px 30px',
-                    fontSize: '12px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '6px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-              <button
-                onClick={loadAuditLogs}
-                disabled={loadingAudit}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 12px',
-                  backgroundColor: '#fff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                <RefreshCw size={13} className={loadingAudit ? 'animate-spin' : ''} /> Refresh
-              </button>
-            </div>
-          </div>
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Timestamp (UTC)</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Rule Identifier</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Action</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Previous Value</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>New Value</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Modified By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingAudit ? (
-                  <tr>
-                    <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#64748b' }}>
-                      <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: '#2563eb' }} />
-                      Loading rule audit logs...
-                    </td>
-                  </tr>
-                ) : auditLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}>
-                      No rule changes have been recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  auditLogs
-                    .filter(log => {
-                      if (!auditSearch.trim()) return true;
-                      const q = auditSearch.toLowerCase();
-                      return (
-                        (log.ruleName && log.ruleName.toLowerCase().includes(q)) ||
-                        (log.action && log.action.toLowerCase().includes(q)) ||
-                        (log.modifiedBy && log.modifiedBy.toLowerCase().includes(q))
-                      );
-                    })
-                    .map((log) => {
-                      const actionBadge = log.action === 'CREATED'
-                        ? { bg: '#dcfce7', text: '#15803d', border: '#86efac' }
-                        : log.action === 'UPDATED'
-                        ? { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd' }
-                        : log.action === 'TOGGLED'
-                        ? { bg: '#fef3c7', text: '#b45309', border: '#fde68a' }
-                        : { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' };
-
-                      return (
-                        <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', color: '#64748b', fontFamily: 'monospace' }}>
-                            {log.timestamp ? new Date(log.timestamp).toISOString().replace('T', ' ').substring(0, 19) + ' UTC' : 'N/A'}
-                          </td>
-                          <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a' }}>
-                            {log.ruleName || log.ruleId}
-                          </td>
-                          <td style={{ padding: '12px 14px' }}>
-                            <span style={{
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              backgroundColor: actionBadge.bg,
-                              color: actionBadge.text,
-                              border: `1px solid ${actionBadge.border}`
-                            }}>
-                              {log.action}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: '11px', color: '#64748b', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.previousValue}>
-                            {log.previousValue || '—'}
-                          </td>
-                          <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: '11px', color: '#0f172a', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.newValue}>
-                            {log.newValue || '—'}
-                          </td>
-                          <td style={{ padding: '12px 16px', color: '#334155', fontWeight: 600 }}>
-                            {log.modifiedBy || 'Admin'}
-                          </td>
-                        </tr>
-                      );
-                    })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* VIEW: ACTIVE RULES */}
-      {panelTab === 'rules' && (
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.6fr) minmax(360px, 1fr)',
-        gap: '24px',
-        alignItems: 'start'
-      }}>
-
-        {/* LEFT COLUMN: Active Rule Sets Table */}
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-
-          {/* Table Toolbar */}
-          <div style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid #e2e8f0',
-            backgroundColor: '#f8fafc',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Active Rule Sets</span>
-                <span style={{
-                  backgroundColor: '#dbeafe',
-                  color: '#1e40af',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  borderRadius: '12px'
-                }}>
-                  {filteredRules.length} {filteredRules.length === 1 ? 'Rule' : 'Rules'}
-                </span>
-              </div>
-              <div style={{ fontSize: '12px', color: '#64748b' }}>
-                Engine Evaluator: <strong style={{ color: '#16a34a' }}>Active</strong>
-              </div>
-            </div>
-
-            {/* Search & Category Filter Controls */}
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <div style={{
-                position: 'relative',
-                flex: 1,
-                minWidth: '200px'
-              }}>
-                <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '10px' }} />
-                <input
-                  type="text"
-                  placeholder="Filter rules by name or category..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 32px',
-                    fontSize: '12px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '6px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="text-gray-900"
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '12px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
-                  cursor: 'pointer',
-                  fontWeight: 500
-                }}
-              >
-                <option value="ALL" className="text-gray-900" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>All Categories</option>
-                {SIGNAL_CATEGORIES.map(cat => (
-                  <option key={cat} value={cat} className="text-gray-900" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>{cat}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Table Content */}
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Rule ID</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Rule & Description</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Signal Category</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Threshold</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Score Impact</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Status</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && rules.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#64748b' }}>
-                      <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: '#2563eb' }} />
-                      Loading configured rules from engine...
-                    </td>
-                  </tr>
-                ) : filteredRules.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}>
-                      No rules found matching query "{searchQuery}".
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRules.map((rule) => {
-                    const weightStyle = getScoreWeightBadge(rule.scoreWeight);
-                    const isSelectedForEdit = editingRuleId === rule.id;
-
-                    return (
-                      <tr
-                        key={rule.id}
-                        style={{
-                          borderBottom: '1px solid #f1f5f9',
-                          backgroundColor: isSelectedForEdit ? '#eff6ff' : rule.isActive ? '#fff' : '#fcfcfc',
-                          transition: 'background-color 0.15s ease'
-                        }}
-                      >
-                        {/* Rule ID */}
-                        <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: 700, color: '#2563eb', fontSize: '12px' }}>
-                          {rule.ruleId || `RUL-00${rule.id}`}
-                        </td>
-
-                        {/* Name & Description */}
-                        <td style={{ padding: '14px 16px', maxWidth: '240px' }}>
-                          <div style={{ fontWeight: 700, color: rule.isActive ? '#0f172a' : '#64748b', fontSize: '13px', marginBottom: '2px' }}>
-                            {rule.ruleName}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>
-                            {rule.description || 'Standard fraud evaluation threshold'}
-                          </div>
-                        </td>
-
-                        {/* Signal Category */}
-                        <td style={{ padding: '14px 14px' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor: '#f1f5f9',
-                            color: '#334155',
-                            border: '1px solid #e2e8f0',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {rule.signalCategory || 'General'}
-                          </span>
-                        </td>
-
-                        {/* Threshold */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                            {rule.signalCategory === 'Device Fingerprint' ? (
-                              <span style={{ color: '#475569', fontSize: '11px', backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
-                                Boolean Check
-                              </span>
-                            ) : rule.thresholdUnit === 'Rs.' ? (
-                              `Rs. ${Number(rule.thresholdValue || 0).toLocaleString()}`
-                            ) : (
-                              `${rule.thresholdValue} ${rule.thresholdUnit || ''}`
-                            )}
-                          </span>
-                        </td>
-
-                        {/* Score Impact */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{
-                              fontWeight: 800,
-                              color: weightStyle.text,
-                              backgroundColor: weightStyle.bg,
-                              border: `1px solid ${weightStyle.border}`,
-                              padding: '2px 8px',
-                              borderRadius: '12px',
-                              fontSize: '11px'
-                            }}>
-                              +{rule.scoreWeight} pts
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Status Toggle Switch */}
-                        <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                          <button
-                            onClick={isAdmin ? () => handleToggleStatus(rule) : undefined}
-                            disabled={!isAdmin}
-                            title={!isAdmin ? 'Requires Administrator privileges' : (rule.isActive ? 'Click to disable' : 'Click to activate')}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '3px 8px',
-                              borderRadius: '12px',
-                              border: 'none',
-                              cursor: !isAdmin ? 'not-allowed' : 'pointer',
-                              opacity: !isAdmin ? 0.6 : 1,
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              backgroundColor: rule.isActive ? '#dcfce7' : '#f1f5f9',
-                              color: rule.isActive ? '#15803d' : '#64748b'
-                            }}
-                          >
-                            <span style={{
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              backgroundColor: rule.isActive ? '#16a34a' : '#94a3b8'
-                            }} />
-                            {rule.isActive ? 'Active' : 'Disabled'}
-                          </button>
-                        </td>
-
-                        {/* Actions */}
-                        <td style={{ padding: '14px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                            <button
-                              onClick={isAdmin ? () => handleEditRule(rule) : () => setSelectedInspectRule(rule)}
-                              title={!isAdmin ? 'Requires Administrator privileges (Click row to inspect)' : 'Edit Rule Configuration'}
-                              style={{
-                                padding: '6px 8px',
-                                backgroundColor: isSelectedForEdit ? '#2563eb' : '#fff',
-                                color: isSelectedForEdit ? '#fff' : !isAdmin ? '#94a3b8' : '#475569',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '6px',
-                                cursor: !isAdmin ? 'not-allowed' : 'pointer',
-                                opacity: !isAdmin ? 0.5 : 1,
-                                display: 'inline-flex',
-                                alignItems: 'center'
-                              }}
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                            <button
-                              onClick={isAdmin ? () => handleDeleteRule(rule) : undefined}
-                              disabled={!isAdmin}
-                              title={!isAdmin ? 'Requires Administrator privileges' : 'Delete Rule'}
-                              style={{
-                                padding: '6px 8px',
-                                backgroundColor: '#fff',
-                                color: !isAdmin ? '#94a3b8' : '#dc2626',
-                                border: '1px solid #fee2e2',
-                                borderRadius: '6px',
-                                cursor: !isAdmin ? 'not-allowed' : 'pointer',
-                                opacity: !isAdmin ? 0.4 : 1,
-                                display: 'inline-flex',
-                                alignItems: 'center'
-                              }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Table Footer */}
-          <div style={{
-            padding: '12px 20px',
-            backgroundColor: '#f8fafc',
-            borderTop: '1px solid #e2e8f0',
-            fontSize: '12px',
-            color: '#64748b',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <span>Showing {filteredRules.length} of {rules.length} configured rules</span>
-            <span style={{ fontSize: '11px' }}>Changes to rules take effect immediately on next transaction evaluation</span>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: Admin Form OR Analyst Inspection Panel */}
-        {!isAdmin ? (
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '18px 24px',
-              backgroundColor: '#f8fafc',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: '#fee2e2',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#dc2626'
-              }}>
-                <Lock size={16} />
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                  Rule Authoring Restricted
-                </h3>
-                <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>
-                  Requires Administrator privileges
-                </span>
-              </div>
-            </div>
-
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
-                As an Analyst, you have <strong>Read-Only</strong> permissions to inspect risk thresholds, weights, and categories.
-                Modifying thresholds or defining new safety rules requires an <strong>Administrator</strong> role.
-              </p>
-
-              {/* Inspected Rule Details */}
-              {(selectedInspectRule || rules[0]) && (
-                <div style={{
-                  padding: '16px',
-                  backgroundColor: '#f8fafc',
-                  borderRadius: '10px',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#2563eb', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      Inspected Rule
-                    </span>
-                    <span style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      backgroundColor: (selectedInspectRule || rules[0]).isActive ? '#dcfce7' : '#f1f5f9',
-                      color: (selectedInspectRule || rules[0]).isActive ? '#15803d' : '#64748b'
-                    }}>
-                      {(selectedInspectRule || rules[0]).isActive ? 'Active' : 'Disabled'}
-                    </span>
-                  </div>
-
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
-                    {(selectedInspectRule || rules[0]).ruleName}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
-                    {(selectedInspectRule || rules[0]).description || 'Standard fraud heuristic parameter.'}
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0', fontSize: '12px' }}>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Category:</span>
-                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{(selectedInspectRule || rules[0]).signalCategory}</div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Threshold:</span>
-                      <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                        {(selectedInspectRule || rules[0]).thresholdValue} {(selectedInspectRule || rules[0]).thresholdUnit || ''}
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Score Weight:</span>
-                      <div style={{ fontWeight: 700, color: '#2563eb' }}>+{(selectedInspectRule || rules[0]).scoreWeight} pts</div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Rule ID:</span>
-                      <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#64748b' }}>{(selectedInspectRule || rules[0]).ruleId || `RUL-${(selectedInspectRule || rules[0]).id}`}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div style={{
-                padding: '12px',
-                backgroundColor: '#eff6ff',
-                borderRadius: '8px',
-                border: '1px solid #bfdbfe',
-                fontSize: '11px',
-                color: '#1e40af',
-                lineHeight: 1.4
-              }}>
-                💡 Tip: Click any row in the table to view its full parameter breakdown above.
-              </div>
-            </div>
-          </div>
-        ) : (
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          border: editingRuleId ? '2px solid #2563eb' : '1px solid #e2e8f0',
-          boxShadow: editingRuleId ? '0 4px 12px rgba(37,99,235,0.1)' : '0 1px 3px rgba(0,0,0,0.05)',
-          overflow: 'hidden'
-        }}>
-          {/* Card Header */}
-          <div style={{
-            padding: '18px 24px',
-            backgroundColor: editingRuleId ? '#eff6ff' : '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
-                  {editingRuleId ? 'Edit Rule Configuration' : 'Add New Rule'}
-                </h3>
-                {editingRuleId && (
-                  <span style={{
-                    backgroundColor: '#2563eb',
-                    color: '#fff',
-                    fontSize: '10px',
-                    fontWeight: 800,
-                    padding: '2px 6px',
-                    borderRadius: '4px'
-                  }}>
-                    EDIT MODE
-                  </span>
-                )}
-              </div>
-              <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                {editingRuleId ? 'Modify threshold parameters and impact weights' : 'Define a new risk signal evaluation threshold'}
-              </p>
-            </div>
-            {editingRuleId && (
-              <button
-                onClick={handleReset}
-                style={{
-                  background: 'none',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  padding: '4px 8px',
-                  fontSize: '11px',
-                  color: '#475569',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel Edit
-              </button>
-            )}
-          </div>
-
-          {/* Form Content */}
-          <form onSubmit={handleSaveRule} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-
-            {/* Field: Rule Name */}
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                Rule Name <span style={{ color: '#dc2626' }}>*</span>
-              </label>
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="e.g., HighVelocityTransfer, ForeignIpAnomaly"
-                value={form.ruleName}
-                onChange={(e) => handleInputChange('ruleName', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: formErrors.ruleName ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  fontFamily: 'inherit',
-                  transition: 'border-color 0.15s'
-                }}
+                placeholder="Filter audit logs..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
               />
-              {formErrors.ruleName && (
-                <div style={{ color: '#dc2626', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>
-                  {formErrors.ruleName}
-                </div>
-              )}
             </div>
+          </div>
 
-            {/* Field: Signal Category (Task 1: Visible text in select and options) */}
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                Signal Category <span style={{ color: '#dc2626' }}>*</span>
-              </label>
-              <select
-                value={form.signalCategory}
-                onChange={(e) => handleInputChange('signalCategory', e.target.value)}
-                className="text-gray-900"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
-                  boxSizing: 'border-box',
-                  cursor: 'pointer'
-                }}
-              >
-                {SIGNAL_CATEGORIES.map(cat => (
-                  <option
-                    key={cat}
-                    value={cat}
-                    className="text-gray-900"
-                    style={{ color: '#0f172a', backgroundColor: '#ffffff' }}
-                  >
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3.5">Timestamp</th>
+                  <th className="px-6 py-3.5">Rule Identifier</th>
+                  <th className="px-6 py-3.5">Action</th>
+                  <th className="px-6 py-3.5">Previous Value</th>
+                  <th className="px-6 py-3.5">New Value</th>
+                  <th className="px-6 py-3.5">Modified By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm">
+                {auditLogs
+                  .filter(log => !auditSearch || log.ruleName?.toLowerCase().includes(auditSearch.toLowerCase()))
+                  .map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50 border-b border-gray-100">
+                      <td className="px-6 py-4 font-mono text-xs text-gray-500 whitespace-nowrap">
+                        {log.timestamp ? new Date(log.timestamp).toISOString().substring(0, 19).replace('T', ' ') : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-xs text-gray-900">{log.ruleName || log.ruleId}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-600 border border-blue-200">
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-gray-500">{log.previousValue || '—'}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-gray-900 font-bold">{log.newValue || '—'}</td>
+                      <td className="px-6 py-4 text-xs text-gray-700 font-medium">{log.modifiedBy || 'Admin'}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-            {/* Field: Dynamic Threshold Value (Task 2: Conditional rendering based on Signal Category) */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
-                  Threshold Value {form.signalCategory !== 'Device Fingerprint' && <span style={{ color: '#dc2626' }}>*</span>}
-                </label>
-                {form.signalCategory === 'Geolocation Anomaly' && (
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#2563eb', backgroundColor: '#eff6ff', padding: '2px 8px', borderRadius: '6px' }}>
-                    {form.thresholdValue || 0} km
-                  </span>
-                )}
-                {form.signalCategory === 'Transaction Amount' && (
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>
-                    Flag limit in Rs.
-                  </span>
-                )}
-              </div>
+      {/* ACTIVE RULES TAB */}
+      {panelTab === 'rules' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-              {/* Conditional 1: If "Transaction Amount" -> numeric input with fixed "Rs." prefix */}
-              {form.signalCategory === 'Transaction Amount' && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  borderRadius: '8px',
-                  border: formErrors.thresholdValue ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                  overflow: 'hidden',
-                  backgroundColor: '#ffffff'
-                }}>
-                  <span style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#f1f5f9',
-                    color: '#475569',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    borderRight: '1px solid #cbd5e1',
-                    userSelect: 'none'
-                  }}>
-                    Rs.
-                  </span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    placeholder="e.g. 50000"
-                    value={form.thresholdValue}
-                    onChange={(e) => handleInputChange('thresholdValue', e.target.value)}
-                    className="text-gray-900"
-                    style={{
-                      flex: 1,
-                      padding: '10px 14px',
-                      border: 'none',
-                      fontSize: '13px',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      color: '#0f172a',
-                      fontFamily: 'inherit'
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Conditional 2: If "Geolocation Anomaly" -> range slider (0 - 1000) with visual "km" indicator */}
-              {form.signalCategory === 'Geolocation Anomaly' && (
-                <div style={{
-                  padding: '12px 14px',
-                  borderRadius: '8px',
-                  border: formErrors.thresholdValue ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                  backgroundColor: '#f8fafc',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1000"
-                      step="10"
-                      value={Number(form.thresholdValue) || 0}
-                      onChange={(e) => handleInputChange('thresholdValue', e.target.value)}
-                      style={{
-                        flex: 1,
-                        accentColor: '#2563eb',
-                        cursor: 'pointer'
-                      }}
-                    />
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      backgroundColor: '#fff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '6px',
-                      padding: '4px 8px'
-                    }}>
-                      <input
-                        type="number"
-                        min="0"
-                        max="1000"
-                        value={form.thresholdValue}
-                        onChange={(e) => handleInputChange('thresholdValue', e.target.value)}
-                        className="text-gray-900"
-                        style={{
-                          width: '54px',
-                          border: 'none',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          textAlign: 'right',
-                          outline: 'none',
-                          color: '#0f172a'
-                        }}
-                      />
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>km</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#64748b' }}>
-                    <span>0 km</span>
-                    <span>500 km</span>
-                    <span>1,000 km</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Conditional 3: If "Device Fingerprint" -> disabled "N/A" label (boolean toggle) */}
-              {form.signalCategory === 'Device Fingerprint' && (
-                <div style={{
-                  padding: '12px 14px',
-                  borderRadius: '8px',
-                  border: '1px dashed #cbd5e1',
-                  backgroundColor: '#f8fafc',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{
-                      backgroundColor: '#e2e8f0',
-                      color: '#475569',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '4px'
-                    }}>
-                      N/A
-                    </span>
-                    <span style={{ fontSize: '12px', color: '#475569' }}>
-                      Binary boolean check (Evaluates Recognized vs. Unrecognized Fingerprint)
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#16a34a' }}>
-                    Boolean Toggle
-                  </span>
-                </div>
-              )}
-
-              {/* Conditional 4: For all other categories -> Fallback standard numeric input */}
-              {form.signalCategory !== 'Transaction Amount' &&
-               form.signalCategory !== 'Geolocation Anomaly' &&
-               form.signalCategory !== 'Device Fingerprint' && (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    placeholder="e.g., 4 or 70"
-                    value={form.thresholdValue}
-                    onChange={(e) => handleInputChange('thresholdValue', e.target.value)}
-                    className="text-gray-900"
-                    style={{
-                      flex: 2,
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: formErrors.thresholdValue ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                      fontSize: '13px',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      color: '#0f172a'
-                    }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Unit"
-                    value={form.thresholdUnit}
-                    onChange={(e) => handleInputChange('thresholdUnit', e.target.value)}
-                    className="text-gray-900"
-                    style={{
-                      flex: 1,
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '12px',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      backgroundColor: '#f8fafc',
-                      color: '#0f172a'
-                    }}
-                  />
-                </div>
-              )}
-
-              {formErrors.thresholdValue && form.signalCategory !== 'Device Fingerprint' && (
-                <div style={{ color: '#dc2626', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>
-                  {formErrors.thresholdValue}
-                </div>
-              )}
-            </div>
-
-            {/* Field: Score Weight (1-100) */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
-                  Score Weight (1 - 100) <span style={{ color: '#dc2626' }}>*</span>
-                </label>
-                <span style={{
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: form.scoreWeight >= 50 ? '#dc2626' : form.scoreWeight >= 25 ? '#d97706' : '#2563eb',
-                  backgroundColor: form.scoreWeight >= 50 ? '#fee2e2' : form.scoreWeight >= 25 ? '#fef3c7' : '#eff6ff',
-                  padding: '2px 8px',
-                  borderRadius: '10px'
-                }}>
-                  +{form.scoreWeight} points added to score
+          {/* Left Table (2 cols) */}
+          <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-gray-900">Active Rule Sets</span>
+                <span className="bg-blue-50 text-blue-600 font-bold text-xs px-2 py-0.5 rounded-full border border-blue-200">
+                  {filteredRules.length} Rules
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  value={form.scoreWeight}
-                  onChange={(e) => handleInputChange('scoreWeight', e.target.value)}
-                  style={{
-                    flex: 1,
-                    accentColor: '#2563eb',
-                    cursor: 'pointer'
-                  }}
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={form.scoreWeight}
-                  onChange={(e) => handleInputChange('scoreWeight', e.target.value)}
-                  style={{
-                    width: '64px',
-                    padding: '6px 10px',
-                    borderRadius: '6px',
-                    border: formErrors.scoreWeight ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    textAlign: 'center',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-              {formErrors.scoreWeight && (
-                <div style={{ color: '#dc2626', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>
-                  {formErrors.scoreWeight}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-48">
+                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search rules..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
+                  />
                 </div>
-              )}
-            </div>
 
-            {/* Field: Description / Rationale */}
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                Description & Analyst Guidance
-              </label>
-              <textarea
-                rows="3"
-                placeholder="Explain the logic or why this rule fires when threshold is met..."
-                value={form.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  fontFamily: 'inherit',
-                  resize: 'vertical'
-                }}
-              />
-            </div>
-
-            {/* Field: Active Status Toggle Switch */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              backgroundColor: '#f8fafc',
-              borderRadius: '8px',
-              border: '1px solid #e2e8f0'
-            }}>
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Active Status</div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>
-                  {form.isActive ? 'Rule is actively evaluated in real-time pipeline' : 'Rule is currently disabled'}
-                </div>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-800 cursor-pointer"
+                >
+                  <option value="ALL">All Categories</option>
+                  {SIGNAL_CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
-
-              <button
-                type="button"
-                onClick={() => handleInputChange('isActive', !form.isActive)}
-                style={{
-                  width: '48px',
-                  height: '26px',
-                  borderRadius: '13px',
-                  backgroundColor: form.isActive ? '#16a34a' : '#cbd5e1',
-                  border: 'none',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'background-color 0.2s ease',
-                  padding: 0
-                }}
-              >
-                <span style={{
-                  position: 'absolute',
-                  top: '3px',
-                  left: form.isActive ? '25px' : '3px',
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  backgroundColor: '#fff',
-                  transition: 'left 0.2s ease',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                }} />
-              </button>
             </div>
 
-            {/* Action Buttons: Reset & Solid Blue Save Rule */}
-            <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-              <button
-                type="button"
-                onClick={handleReset}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '11px 16px',
-                  backgroundColor: '#fff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#475569',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <RotateCcw size={15} /> Reset
-              </button>
-
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  flex: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '11px 16px',
-                  backgroundColor: '#2563eb', // Solid vibrant blue
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#fff',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 2px 4px rgba(37,99,235,0.3)',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {loading ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : (
-                  <Check size={16} />
-                )}
-                {editingRuleId ? 'Update Rule' : 'Save Rule'}
-              </button>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3.5">Rule ID</th>
+                    <th className="px-6 py-3.5">Rule &amp; Description</th>
+                    <th className="px-6 py-3.5">Threshold</th>
+                    <th className="px-6 py-3.5">Score Weight</th>
+                    <th className="px-6 py-3.5">Status</th>
+                    <th className="px-6 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-sm">
+                  {filteredRules.map((rule) => (
+                    <tr key={rule.id} className="hover:bg-slate-50 border-b border-gray-100 transition-colors">
+                      <td className="px-6 py-4 font-mono font-bold text-xs text-blue-600">
+                        {rule.ruleId || `RUL-${rule.id}`}
+                      </td>
+                      <td className="px-6 py-4 max-w-xs">
+                        <div className="font-bold text-gray-900 text-xs">{rule.ruleName}</div>
+                        <div className="text-[11px] text-gray-500 line-clamp-1">{rule.description || 'Standard rule evaluation'}</div>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-xs text-gray-900 whitespace-nowrap">
+                        {rule.signalCategory === 'Device Fingerprint' ? 'Boolean Check' : `${rule.thresholdValue} ${rule.thresholdUnit || ''}`}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="bg-amber-50 text-amber-700 border border-amber-200 font-extrabold text-xs px-2 py-0.5 rounded-full">
+                          +{rule.scoreWeight} pts
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={isAdmin ? () => handleToggleStatus(rule) : undefined}
+                          disabled={!isAdmin}
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border cursor-pointer ${
+                            rule.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+                          }`}
+                        >
+                          {rule.isActive ? 'Active' : 'Disabled'}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1">
+                          {isAdmin ? (
+                            <>
+                              <button
+                                onClick={() => handleEditRule(rule)}
+                                className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-slate-100 rounded-md cursor-pointer"
+                                title="Edit Rule"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRule(rule)}
+                                className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-slate-100 rounded-md cursor-pointer"
+                                title="Delete Rule"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => setSelectedInspectRule(rule)}
+                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-slate-100 rounded-md cursor-pointer"
+                              title="Inspect Rule"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          </div>
 
-          </form>
+          {/* Right Form Card (1 col) */}
+          {isAdmin && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {editingRuleId ? 'Edit Rule Configuration' : 'Add New Rule'}
+              </h3>
+
+              <form onSubmit={handleSaveRule} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-semibold text-gray-700 uppercase mb-1">Rule Name *</label>
+                  <input
+                    type="text"
+                    value={form.ruleName}
+                    onChange={(e) => handleInputChange('ruleName', e.target.value)}
+                    placeholder="e.g., High Velocity Transfer Flag"
+                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {formErrors.ruleName && <div className="text-red-600 text-[11px] mt-1">{formErrors.ruleName}</div>}
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 uppercase mb-1">Signal Category</label>
+                  <select
+                    value={form.signalCategory}
+                    onChange={(e) => handleInputChange('signalCategory', e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
+                  >
+                    {SIGNAL_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-gray-700 uppercase mb-1">Threshold</label>
+                    <input
+                      type="text"
+                      value={form.thresholdValue}
+                      onChange={(e) => handleInputChange('thresholdValue', e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-gray-700 uppercase mb-1">Unit</label>
+                    <input
+                      type="text"
+                      value={form.thresholdUnit}
+                      onChange={(e) => handleInputChange('thresholdUnit', e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 uppercase mb-1">Score Weight Impact (1-100)</label>
+                  <input
+                    type="number"
+                    value={form.scoreWeight}
+                    onChange={(e) => handleInputChange('scoreWeight', e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 uppercase mb-1">Description</label>
+                  <textarea
+                    rows={2}
+                    value={form.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    placeholder="Brief rule description..."
+                    className="w-full p-2.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="flex-1 py-2 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-slate-50 cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-2 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm cursor-pointer"
+                  >
+                    {editingRuleId ? 'Update Rule' : 'Save Rule'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
         </div>
-        )}
-      </div>
       )}
+
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart 
 } from 'recharts';
 
 const MOCK_ANALYTICS = {
@@ -18,33 +18,16 @@ const MOCK_ANALYTICS = {
   ]
 };
 
-const MetricCard = ({ title, value, prefix = "", suffix = "", trend, trendLabel }) => (
-  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
-    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-      <svg className="w-16 h-16 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    </div>
-    
-    <h3 className="text-slate-400 font-medium text-sm tracking-wide uppercase mb-2">{title}</h3>
-    <div className="flex items-baseline space-x-1">
-      <span className="text-3xl font-bold text-slate-100">
-        {prefix}{typeof value === 'number' ? value.toLocaleString(undefined, { minimumFractionDigits: title.includes('Rate') ? 1 : 2 }) : value}{suffix}
-      </span>
+const MetricCard = ({ title, value, suffix = "", trend, trendLabel }) => (
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{title}</div>
+    <div className="text-2xl md:text-3xl font-extrabold text-gray-900">
+      {typeof value === 'number' ? value.toLocaleString(undefined, { minimumFractionDigits: title.includes('Rate') ? 1 : 2 }) : value}{suffix}
     </div>
     
     {trend && (
-      <div className={`mt-4 flex items-center text-sm font-medium ${trend > 0 ? (title.includes('Reversal') ? 'text-rose-400' : 'text-emerald-400') : 'text-slate-400'}`}>
-        {trend > 0 ? (
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-          </svg>
-        )}
-        <span>{Math.abs(trend)}% {trendLabel}</span>
+      <div className={`mt-3 flex items-center text-xs font-semibold ${trend > 0 ? (title.includes('Reversal') ? 'text-red-600' : 'text-emerald-600') : 'text-gray-500'}`}>
+        <span>{trend > 0 ? '▲' : '▼'} {Math.abs(trend)}% {trendLabel}</span>
       </div>
     )}
   </div>
@@ -53,9 +36,9 @@ const MetricCard = ({ title, value, prefix = "", suffix = "", trend, trendLabel 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900 border border-slate-700 p-4 rounded-xl shadow-2xl">
-        <p className="text-slate-400 mb-1">{label}</p>
-        <p className="text-blue-400 font-bold text-lg">
+      <div className="bg-white border border-gray-200 p-3 rounded-lg shadow-md">
+        <p className="text-xs text-gray-500 mb-1">{label}</p>
+        <p className="text-blue-600 font-bold text-sm">
           {payload[0].value.toLocaleString()} LKR
         </p>
       </div>
@@ -67,7 +50,6 @@ const CustomTooltip = ({ active, payload, label }) => {
 const AnalyticsSummaryPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -82,7 +64,6 @@ const AnalyticsSummaryPage = () => {
         
         const result = await response.json();
         
-        // Map backend response to component state
         setData({
           totalVolume: result.totalVolume,
           reversalRate: result.reversalRatePercent,
@@ -91,13 +72,10 @@ const AnalyticsSummaryPage = () => {
         });
         setLoading(false);
       } catch (err) {
-        console.error(err);
-        setError(err.message);
-        // Fallback to mock data if API fails
         setTimeout(() => {
           setData(MOCK_ANALYTICS);
           setLoading(false);
-        }, 1000);
+        }, 800);
       }
     };
 
@@ -106,29 +84,32 @@ const AnalyticsSummaryPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin"></div>
-          <p className="text-slate-400 font-medium tracking-wide">Loading System Analytics...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Loading System Analytics...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 p-8 font-sans text-slate-200">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8 font-sans text-gray-900">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-            System Analytics
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            ANALYTICS &gt; SYSTEM OVERVIEW
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+            System Analytics &amp; Volume Metrics
           </h1>
-          <p className="text-slate-400 mt-2">High-level overview of transaction volume and system health.</p>
+          <p className="text-gray-500 text-xs mt-1">High-level overview of transaction volume and system health.</p>
         </div>
 
         {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <MetricCard 
             title="Total Transaction Volume" 
             value={data?.totalVolume || 0} 
@@ -153,35 +134,35 @@ const AnalyticsSummaryPage = () => {
         </div>
 
         {/* Chart Section */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
           <div className="mb-6 flex justify-between items-center">
-            <h2 className="text-xl font-bold text-slate-100">Transaction Volume Over Time (LKR)</h2>
-            <div className="px-3 py-1 bg-slate-800 text-slate-300 text-sm rounded-md border border-slate-700">
+            <h2 className="text-base font-bold text-gray-900">Transaction Volume Over Time (LKR)</h2>
+            <div className="px-3 py-1 bg-slate-50 text-gray-600 text-xs font-medium rounded-full border border-gray-200">
               Last 7 Days
             </div>
           </div>
           
-          <div className="h-[400px] w-full">
+          <div className="h-[360px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.chartData || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis 
                   dataKey="date" 
-                  stroke="#64748b" 
-                  tick={{ fill: '#64748b' }}
+                  stroke="#94a3b8" 
+                  tick={{ fill: '#64748b', fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   dy={10}
                 />
                 <YAxis 
-                  stroke="#64748b" 
-                  tick={{ fill: '#64748b' }}
+                  stroke="#94a3b8" 
+                  tick={{ fill: '#64748b', fontSize: 12 }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) => `${value / 1000}k`}
@@ -191,11 +172,10 @@ const AnalyticsSummaryPage = () => {
                 <Area 
                   type="monotone" 
                   dataKey="volume" 
-                  stroke="#3b82f6" 
-                  strokeWidth={3}
+                  stroke="#2563eb" 
+                  strokeWidth={2.5}
                   fillOpacity={1} 
                   fill="url(#colorVolume)" 
-                  activeDot={{ r: 6, fill: '#60a5fa', stroke: '#1e3a8a', strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>

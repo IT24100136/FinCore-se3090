@@ -18,44 +18,25 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#090d16', color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-      {/* Sub-Header Tabs */}
-      <div style={{
-        backgroundColor: '#0d1527',
-        borderBottom: '1px solid #1e293b',
-        padding: '0 2rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '1rem',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 0' }}>
-          <div style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '6px',
-            backgroundColor: 'rgba(99, 102, 241, 0.2)',
-            border: '1px solid rgba(99, 102, 241, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#818cf8',
-          }}>
-            <ShieldCheck size={18} />
+    <div className="min-h-screen bg-slate-50 text-gray-900 flex flex-col font-sans">
+      {/* Sub-Header Tabs matching dark theme */}
+      <div className="bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3 py-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#f1f5f9', letterSpacing: '0.02em' }}>
+            <div className="text-xs font-bold text-slate-100 tracking-wider uppercase">
               ADMIN COMMAND SUITE
-            </span>
-            <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: '#64748b' }}>
+            </div>
+            <div className="text-[11px] text-slate-400 font-medium">
               Tier-1 Supervisory Authorization
-            </span>
+            </div>
           </div>
         </div>
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div className="flex items-center gap-1.5 py-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -63,22 +44,13 @@ export default function AdminDashboardPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '10px 16px',
-                  fontSize: '0.85rem',
-                  fontWeight: isActive ? '600' : '500',
-                  color: isActive ? '#38bdf8' : '#94a3b8',
-                  backgroundColor: isActive ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
-                  border: 'none',
-                  borderBottom: isActive ? '2px solid #38bdf8' : '2px solid transparent',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  isActive
+                    ? 'bg-blue-600 text-white font-semibold shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
               >
-                <Icon size={16} />
+                <Icon className="w-4 h-4" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -87,7 +59,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Main Workspace View */}
-      <div style={{ flex: 1 }}>
+      <div className="flex-1 bg-slate-50">
         {activeTab === 'transactions' && (
           <TransactionMonitoringDashboard />
         )}
@@ -95,7 +67,7 @@ export default function AdminDashboardPage() {
           <FinancialReversalsPage />
         )}
         {activeTab === 'rules' && (
-          <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+          <div className="p-6 md:p-8 max-w-7xl mx-auto">
             <RuleConfigurationPanel />
           </div>
         )}

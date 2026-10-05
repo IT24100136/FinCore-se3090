@@ -50,129 +50,78 @@ export default function AuditTrailsPage() {
   }, []);
 
   return (
-    <div style={{
-      minHeight: 'calc(100vh - 64px)',
-      backgroundColor: '#f8fafc',
-      padding: '24px 32px',
-      color: '#0f172a'
-    }}>
-      <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8 text-gray-900 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Navigation Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="flex items-center justify-between">
           <button
             onClick={() => navigate(-1)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              backgroundColor: '#fff',
-              border: '1px solid #cbd5e1',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: '#475569',
-              cursor: 'pointer'
-            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium text-gray-700 hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
           >
-            <ArrowLeft size={14} /> Back
+            <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
-            <ShieldCheck size={14} color="#16a34a" />
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span>PostgreSQL Regulatory Audit Stream Active</span>
           </div>
         </div>
 
         {/* Quick KPI Stat Ribbon */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px'
-        }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
           {/* Card 1: Total Audit Events */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            padding: '16px 20px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Total Audited Decisions</span>
-              <FileCheck2 size={18} color="#2563eb" />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Audited Decisions</span>
+              <FileCheck2 className="w-5 h-5 text-blue-600" />
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginTop: '6px' }}>
+            <div className="text-2xl md:text-3xl font-extrabold text-gray-900 mt-2">
               {stats.total}
             </div>
           </div>
 
           {/* Card 2: Approved Decisions */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            padding: '16px 20px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Approved Transactions</span>
-              <CheckCircle2 size={18} color="#16a34a" />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Approved Transactions</span>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#16a34a', marginTop: '6px' }}>
+            <div className="text-2xl md:text-3xl font-extrabold text-emerald-600 mt-2">
               {stats.approved}
             </div>
           </div>
 
           {/* Card 3: Rejected / Blocked */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            padding: '16px 20px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Blocked Fraud / Rejected</span>
-              <XCircle size={18} color="#dc2626" />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Blocked Fraud / Rejected</span>
+              <XCircle className="w-5 h-5 text-red-600" />
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#dc2626', marginTop: '6px' }}>
+            <div className="text-2xl md:text-3xl font-extrabold text-red-600 mt-2">
               {stats.rejected}
             </div>
           </div>
 
           {/* Card 4: Escalations */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            padding: '16px 20px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Senior Escalations</span>
-              <AlertOctagon size={18} color="#7c3aed" />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Senior Escalations</span>
+              <AlertOctagon className="w-5 h-5 text-purple-600" />
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#7c3aed', marginTop: '6px' }}>
+            <div className="text-2xl md:text-3xl font-extrabold text-purple-600 mt-2">
               {stats.escalated}
             </div>
           </div>
 
           {/* Card 5: Mean Risk */}
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            padding: '16px 20px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Mean Case Risk Score</span>
-              <TrendingUp size={18} color="#d97706" />
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mean Case Risk Score</span>
+              <TrendingUp className="w-5 h-5 text-amber-600" />
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#d97706', marginTop: '6px' }}>
-              {stats.avgScore} <span style={{ fontSize: '13px', fontWeight: 600, color: '#94a3b8' }}>/ 100</span>
+            <div className="text-2xl md:text-3xl font-extrabold text-amber-600 mt-2">
+              {stats.avgScore} <span className="text-xs font-semibold text-gray-400">/ 100</span>
             </div>
           </div>
         </div>

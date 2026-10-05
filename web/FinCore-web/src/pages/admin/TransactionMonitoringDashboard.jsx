@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReversalActionScreen from './ReversalActionScreen';
+import { Search, RefreshCw, Activity, ArrowUpRight } from 'lucide-react';
 
 const MOCK_TRANSACTIONS = [
   { id: 'TXN-1001', sender: 'john_doe', receiver: 'jane_smith', amount: 15000.00, timestamp: '2026-09-29T10:30:00Z', status: 'Held', riskScore: 85 },
@@ -9,14 +10,14 @@ const MOCK_TRANSACTIONS = [
   { id: 'TXN-1005', sender: 'david_k', receiver: 'john_doe', amount: 800.00, timestamp: '2026-09-29T14:20:00Z', status: 'Completed', riskScore: 5 },
 ];
 
-const getStatusColor = (status) => {
+const getStatusBadge = (status) => {
   switch (status) {
-    case 'Completed': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'Held': return 'bg-amber-50 text-amber-700 border-amber-200';
-    case 'PendingSecondApproval': return 'bg-purple-50 text-purple-700 border-purple-200';
-    case 'Reversed': return 'bg-rose-50 text-rose-700 border-rose-200';
-    case 'Pending': return 'bg-blue-50 text-blue-700 border-blue-200';
-    default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    case 'Completed': return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    case 'Held': return 'bg-amber-50 text-amber-700 border border-amber-200';
+    case 'PendingSecondApproval': return 'bg-purple-50 text-purple-700 border border-purple-200';
+    case 'Reversed': return 'bg-red-50 text-red-600 border border-red-200';
+    case 'Pending': return 'bg-blue-50 text-blue-600 border border-blue-200';
+    default: return 'bg-slate-100 text-slate-700 border border-slate-200';
   }
 };
 
@@ -48,7 +49,6 @@ const TransactionMonitoringDashboard = () => {
       const fetchedData = Array.isArray(result.data) ? result.data : [];
       setTransactions(fetchedData);
     } catch (error) {
-      // Fallback only if no data currently loaded
       setTransactions(prev => prev.length === 0 ? MOCK_TRANSACTIONS : prev);
     } finally {
       if (isInitial) setLoading(false);
@@ -68,7 +68,6 @@ const TransactionMonitoringDashboard = () => {
     setSelectedTransaction(null);
   };
 
-  // Filter and Search Logic
   const filteredTransactions = transactions.filter(t => {
     const s = (t.sender || '').toLowerCase();
     const r = (t.receiver || '').toLowerCase();
@@ -80,7 +79,6 @@ const TransactionMonitoringDashboard = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // Pagination Logic
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / itemsPerPage));
   const paginatedTransactions = filteredTransactions.slice(
     (currentPage - 1) * itemsPerPage,
@@ -88,82 +86,86 @@ const TransactionMonitoringDashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8 font-sans text-slate-800">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8 font-sans text-gray-900">
+      <div className="max-w-7xl mx-auto space-y-6">
+
+        {/* Header & Breadcrumb */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              MONITORING &gt; TRANSACTIONS
+            </div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
                 Transaction Monitoring
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 LIVE
               </span>
             </div>
-            <p className="text-slate-500 text-sm mt-1">Overall system monitoring view across all transaction lifecycles.</p>
+            <p className="text-gray-500 text-xs mt-1">Overall system monitoring view across all transaction lifecycles.</p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>Auto-refreshing every 3s</span>
           </div>
         </div>
 
         {/* Controls Panel */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm gap-4">
-          <div className="relative w-full md:w-96">
-            <svg className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white border border-gray-200 rounded-lg p-4 shadow-sm gap-4">
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <input 
               type="text" 
               placeholder="Search by ID, sender, receiver..." 
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+              className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-gray-300 rounded-lg text-xs text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-gray-400"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           
-          <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
-            <span className="text-xs font-medium text-slate-500">Filter:</span>
-            <select 
-              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer font-medium"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-            >
-              <option value="All">All Statuses</option>
-              <option value="Completed">Completed</option>
-              <option value="Held">Held</option>
-              <option value="PendingSecondApproval">Pending Second Approval</option>
-              <option value="Pending">Pending</option>
-              <option value="Reversed">Reversed</option>
-            </select>
+          <div className="flex items-center space-x-2 w-full md:w-auto justify-end flex-wrap">
+            <span className="text-xs font-semibold text-gray-500 uppercase mr-1">Status:</span>
+            {['All', 'Completed', 'Held', 'PendingSecondApproval', 'Reversed'].map((status) => (
+              <button
+                key={status}
+                onClick={() => {
+                  setStatusFilter(status);
+                  setCurrentPage(1);
+                }}
+                className={`rounded-full px-3.5 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                  statusFilter === status
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-slate-50'
+                }`}
+              >
+                {status === 'PendingSecondApproval' ? 'Dual Approval' : status}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Data Table */}
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold uppercase tracking-wider">
-                  <th className="p-4">Transaction ID</th>
-                  <th className="p-4">Sender</th>
-                  <th className="p-4">Receiver</th>
-                  <th className="p-4 text-right">Amount (LKR)</th>
-                  <th className="p-4 text-center">Risk Score</th>
-                  <th className="p-4">Date / Time</th>
-                  <th className="p-4">Status</th>
+                <tr className="bg-slate-50 border-b border-gray-200 text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                  <th className="px-6 py-3.5">Transaction ID</th>
+                  <th className="px-6 py-3.5">Sender</th>
+                  <th className="px-6 py-3.5">Receiver</th>
+                  <th className="px-6 py-3.5 text-right">Amount (LKR)</th>
+                  <th className="px-6 py-3.5 text-center">Risk Score</th>
+                  <th className="px-6 py-3.5">Date / Time</th>
+                  <th className="px-6 py-3.5">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
+              <tbody className="divide-y divide-gray-100 text-sm">
                 {loading ? (
                   <tr>
-                    <td colSpan="7" className="p-12 text-center text-slate-400">
-                      <div className="flex justify-center items-center space-x-2">
+                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                      <div className="flex justify-center items-center gap-2">
                         <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                         <span>Loading transactions...</span>
                       </div>
@@ -171,35 +173,37 @@ const TransactionMonitoringDashboard = () => {
                   </tr>
                 ) : paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="p-12 text-center text-slate-400">No transactions found matching your criteria.</td>
+                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">No transactions found matching criteria.</td>
                   </tr>
                 ) : (
                   paginatedTransactions.map((tx) => (
                     <tr 
                       key={tx.id} 
                       onClick={() => setSelectedTransaction(tx)}
-                      className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                      className="hover:bg-slate-50 border-b border-gray-100 transition-colors cursor-pointer group"
                     >
-                      <td className="p-4 font-mono font-medium text-blue-600 group-hover:underline">{tx.id}</td>
-                      <td className="p-4 text-slate-700">{tx.sender}</td>
-                      <td className="p-4 text-slate-700">{tx.receiver}</td>
-                      <td className="p-4 text-right font-semibold text-slate-900">
-                        {Number(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <td className="px-6 py-4 font-mono font-bold text-blue-600 group-hover:underline">{tx.id}</td>
+                      <td className="px-6 py-4 text-gray-900 font-medium">{tx.sender}</td>
+                      <td className="px-6 py-4 text-gray-900 font-medium">{tx.receiver}</td>
+                      <td className="px-6 py-4 text-right font-bold text-gray-900">
+                        Rs. {Number(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="p-4 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                          tx.riskScore >= 70 ? 'bg-red-100 text-red-700' :
-                          tx.riskScore >= 40 ? 'bg-amber-100 text-amber-700' :
-                          'bg-emerald-100 text-emerald-700'
-                        }`}>
-                          {tx.riskScore || 0}/100
-                        </span>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="font-bold text-xs text-gray-900 w-8 text-right">{tx.riskScore || 0}</span>
+                          <div className="w-14 h-2 bg-gray-100 rounded-full overflow-hidden shrink-0">
+                            <div 
+                              className={`h-full ${tx.riskScore >= 70 ? 'bg-red-600' : tx.riskScore >= 40 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${Math.min(100, tx.riskScore || 0)}%` }}
+                            />
+                          </div>
+                        </div>
                       </td>
-                      <td className="p-4 text-slate-500 text-xs">
+                      <td className="px-6 py-4 text-gray-500 text-xs">
                         {tx.timestamp ? new Date(tx.timestamp).toLocaleString() : 'N/A'}
                       </td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${getStatusColor(tx.status)}`}>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${getStatusBadge(tx.status)}`}>
                           {tx.status}
                         </span>
                       </td>
@@ -212,22 +216,22 @@ const TransactionMonitoringDashboard = () => {
           
           {/* Pagination */}
           {!loading && totalPages > 1 && (
-            <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-between items-center">
-              <span className="text-xs text-slate-500">
+            <div className="bg-slate-50 px-6 py-3 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
+              <span>
                 Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} of {filteredTransactions.length} entries
               </span>
               <div className="flex space-x-2">
                 <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1 bg-white border border-gray-300 rounded-md text-xs font-medium text-gray-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   Previous
                 </button>
                 <button 
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 py-1 bg-white border border-gray-300 rounded-md text-xs font-medium text-gray-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   Next
                 </button>

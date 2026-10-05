@@ -3,7 +3,6 @@ import { fraudService } from '../../services/fraudService';
 import {
   Flag,
   Search,
-  Filter,
   RefreshCw,
   AlertTriangle,
   CheckCircle,
@@ -11,12 +10,8 @@ import {
   Clock,
   ChevronRight,
   ShieldAlert,
-  ArrowUpRight,
-  DollarSign,
   TrendingUp,
-  FileText,
-  SlidersHorizontal,
-  ChevronDown
+  SlidersHorizontal
 } from 'lucide-react';
 
 export default function FraudFlagList({ onSelectFlag, onOpenTrends, onOpenRules }) {
@@ -24,10 +19,10 @@ export default function FraudFlagList({ onSelectFlag, onOpenTrends, onOpenRules 
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Dropdown filter states
-  const [riskRangeFilter, setRiskRangeFilter] = useState('ALL'); // 'ALL' | 'HIGH' (>75) | 'MODERATE' (40-75) | 'LOW' (<40)
-  const [dateFilter, setDateFilter] = useState('ALL'); // 'ALL' | 'TODAY' | 'WEEK' | 'MONTH'
-  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'Flagged' | 'Under Review' | 'Pending Second Approval' | 'Approved' | 'Rejected'
+  // Filter states
+  const [riskRangeFilter, setRiskRangeFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   useEffect(() => {
     loadFlags();
@@ -51,9 +46,7 @@ export default function FraudFlagList({ onSelectFlag, onOpenTrends, onOpenRules 
     }
   };
 
-  // Filtering logic
   const filteredFlags = flags.filter(flag => {
-    // 1. Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
@@ -65,7 +58,6 @@ export default function FraudFlagList({ onSelectFlag, onOpenTrends, onOpenRules 
       if (!matchSearch) return false;
     }
 
-    // 2. Risk Range Filter
     if (riskRangeFilter === 'HIGH') {
       if (flag.riskScore < 75) return false;
     } else if (riskRangeFilter === 'MODERATE') {
@@ -74,77 +66,42 @@ export default function FraudFlagList({ onSelectFlag, onOpenTrends, onOpenRules 
       if (flag.riskScore >= 40) return false;
     }
 
-    // 3. Status Filter
     if (statusFilter !== 'ALL') {
       if (flag.status.toLowerCase() !== statusFilter.toLowerCase()) return false;
     }
 
-    // 4. Date Filter
     if (dateFilter !== 'ALL' && flag.createdAt) {
       const flagTime = new Date(flag.createdAt).getTime();
       const now = Date.now();
       if (dateFilter === 'TODAY') {
-        const oneDay = 24 * 3600 * 1000;
-        if (now - flagTime > oneDay) return false;
+        if (now - flagTime > 24 * 3600 * 1000) return false;
       } else if (dateFilter === 'WEEK') {
-        const oneWeek = 7 * 24 * 3600 * 1000;
-        if (now - flagTime > oneWeek) return false;
+        if (now - flagTime > 7 * 24 * 3600 * 1000) return false;
       } else if (dateFilter === 'MONTH') {
-        const oneMonth = 30 * 24 * 3600 * 1000;
-        if (now - flagTime > oneMonth) return false;
+        if (now - flagTime > 30 * 24 * 3600 * 1000) return false;
       }
     }
 
     return true;
   });
 
-  // Calculate summary metrics
   const totalCount = flags.length;
   const criticalCount = flags.filter(f => f.riskScore >= 75).length;
   const pendingCount = flags.filter(f => f.status === 'Flagged' || f.status === 'Under Review' || f.status === 'Pending Second Approval').length;
   const totalFlaggedAmount = flags.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
 
-  // Helper for score badge styling
-  const getRiskScoreBadge = (score) => {
-    if (score >= 75) {
-      return {
-        bg: '#fee2e2',
-        border: '#ef4444',
-        text: '#dc2626',
-        label: 'HIGH RISK',
-        barColor: '#dc2626'
-      };
-    }
-    if (score >= 40) {
-      return {
-        bg: '#fef3c7',
-        border: '#f59e0b',
-        text: '#d97706',
-        label: 'MODERATE',
-        barColor: '#f59e0b'
-      };
-    }
-    return {
-      bg: '#dcfce7',
-      border: '#10b981',
-      text: '#16a34a',
-      label: 'LOW RISK',
-      barColor: '#10b981'
-    };
-  };
-
-  const getStatusBadge = (status) => {
+  const getStatusBadgeClass = (status) => {
     switch (status) {
       case 'Approved':
-        return { bg: '#dcfce7', text: '#15803d', icon: CheckCircle };
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'Rejected':
-        return { bg: '#fee2e2', text: '#b91c1c', icon: XCircle };
+        return 'bg-red-50 text-red-600 border-red-200';
       case 'Pending Second Approval':
-        return { bg: '#fef3c7', text: '#b45309', icon: Clock };
+        return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'Under Review':
-        return { bg: '#e0f2fe', text: '#0369a1', icon: Clock };
-      default: // 'Flagged'
-        return { bg: '#fef2f2', text: '#dc2626', icon: AlertTriangle };
+        return 'bg-blue-50 text-blue-600 border-blue-200';
+      default:
+        return 'bg-amber-50 text-amber-700 border-amber-200';
     }
   };
 
@@ -153,560 +110,214 @@ export default function FraudFlagList({ onSelectFlag, onOpenTrends, onOpenRules 
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="space-y-6 font-sans text-gray-900">
 
       {/* Top Header & Breadcrumbs */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, letterSpacing: '0.4px', marginBottom: '4px' }}>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
             FRAUD SCORING &amp; INTELLIGENCE &gt; FLAG MONITORING
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Flag size={24} color="#dc2626" /> Flagged Transactions List
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
+            <Flag className="w-6 h-6 text-red-600" /> Flagged Transactions List
           </h1>
-          <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
+          <p className="text-gray-500 text-xs mt-1">
             Live queue of transactions flagged by automated rule scoring and AI behavioral triggers.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="flex items-center gap-2">
           {onOpenTrends && (
             <button
               onClick={onOpenTrends}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 14px',
-                backgroundColor: '#fff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-slate-50 shadow-sm transition-colors cursor-pointer"
             >
-              <TrendingUp size={15} color="#2563eb" /> View Analytics Trends
+              <TrendingUp className="w-3.5 h-3.5 text-blue-600" /> View Analytics
             </button>
           )}
 
           {onOpenRules && (
             <button
               onClick={onOpenRules}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 14px',
-                backgroundColor: '#fff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#334155',
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-slate-50 shadow-sm transition-colors cursor-pointer"
             >
-              <SlidersHorizontal size={15} color="#64748b" /> Rule Engine
+              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" /> Rule Engine
             </button>
           )}
 
           <button
             onClick={loadFlags}
             disabled={loading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 14px',
-              backgroundColor: '#2563eb',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#fff',
-              cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(37,99,235,0.3)'
-            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
           >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh Queue
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
         </div>
       </div>
 
       {/* Metric Cards Row */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '16px'
-      }}>
-        {/* Card 1: Total Flags */}
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          padding: '18px 20px',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-        }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Total Transactions Flagged</div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#0f172a', margin: '6px 0 2px 0' }}>
-            {totalCount}
-          </div>
-          <div style={{ fontSize: '11px', color: '#64748b' }}>Cumulative queue intake</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Total Flagged</div>
+          <div className="text-2xl md:text-3xl font-extrabold text-gray-900">{totalCount}</div>
+          <div className="text-xs text-gray-400 mt-1 font-medium">Cumulative queue intake</div>
         </div>
 
-        {/* Card 2: High Risk (> 75) */}
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          padding: '18px 20px',
-          border: '1px solid #fee2e2',
-          borderLeft: '4px solid #dc2626',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-        }}>
-          <div style={{ fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>Critical / High Risk (&gt; 75)</div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#dc2626', margin: '6px 0 2px 0' }}>
-            {criticalCount}
-          </div>
-          <div style={{ fontSize: '11px', color: '#991b1b' }}>Requires immediate analyst intervention</div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Critical Risk (&gt;75)</div>
+          <div className="text-2xl md:text-3xl font-extrabold text-red-600">{criticalCount}</div>
+          <div className="text-xs text-red-600 mt-1 font-medium">Requires immediate intervention</div>
         </div>
 
-        {/* Card 3: Pending Decision */}
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          padding: '18px 20px',
-          border: '1px solid #fef3c7',
-          borderLeft: '4px solid #f59e0b',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-        }}>
-          <div style={{ fontSize: '12px', color: '#d97706', fontWeight: 700 }}>Pending Review / Action</div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#b45309', margin: '6px 0 2px 0' }}>
-            {pendingCount}
-          </div>
-          <div style={{ fontSize: '11px', color: '#78350f' }}>Awaiting decision or 2nd approval</div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Pending Action</div>
+          <div className="text-2xl md:text-3xl font-extrabold text-amber-600">{pendingCount}</div>
+          <div className="text-xs text-amber-600 mt-1 font-medium">Awaiting decision or 2nd approval</div>
         </div>
 
-        {/* Card 4: Flagged Exposure Value */}
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          padding: '18px 20px',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-        }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Total Value Flagged</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a', margin: '6px 0 2px 0' }}>
-            {formatCurrency(totalFlaggedAmount)}
-          </div>
-          <div style={{ fontSize: '11px', color: '#64748b' }}>Monetary exposure currently guarded</div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Total Flagged Exposure</div>
+          <div className="text-2xl md:text-3xl font-extrabold text-gray-900">{formatCurrency(totalFlaggedAmount)}</div>
+          <div className="text-xs text-gray-400 mt-1 font-medium">Monetary exposure protected</div>
         </div>
       </div>
 
-      {/* Main Table Card with Integrated Header Filters */}
-      <div style={{
-        backgroundColor: '#fff',
-        borderRadius: '12px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        overflow: 'hidden'
-      }}>
+      {/* Main Table Card */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden space-y-4">
 
-        {/* Header Filter Bar */}
-        <div style={{
-          padding: '18px 24px',
-          backgroundColor: '#f8fafc',
-          borderBottom: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '14px'
-        }}>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>Flagged Queue</span>
-              <span style={{
-                backgroundColor: '#e2e8f0',
-                color: '#334155',
-                fontSize: '11px',
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: '12px'
-              }}>
-                {filteredFlags.length} of {flags.length}
-              </span>
-            </div>
-
-            <div style={{ fontSize: '12px', color: '#64748b' }}>
-              Auto-refresh: <strong style={{ color: '#16a34a' }}>Live WebSocket Synced</strong>
-            </div>
+        {/* Toolbar & Filters */}
+        <div className="p-4 bg-slate-50 border-b border-gray-200 flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="relative w-full md:w-72">
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search TX ID, customer, rule..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs text-gray-900 focus:outline-none"
+            />
           </div>
 
-          {/* Interactive Filters Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(240px, 1.5fr) repeat(3, minmax(140px, 1fr))',
-            gap: '12px',
-            alignItems: 'center'
-          }}>
+          <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
+            <select
+              value={riskRangeFilter}
+              onChange={(e) => setRiskRangeFilter(e.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-800 cursor-pointer"
+            >
+              <option value="ALL">All Risk Ranges</option>
+              <option value="HIGH">High Risk (&gt; 75)</option>
+              <option value="MODERATE">Moderate Risk (40 - 74)</option>
+              <option value="LOW">Low Risk (&lt; 40)</option>
+            </select>
 
-            {/* 1. Global Search */}
-            <div style={{ position: 'relative' }}>
-              <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '11px' }} />
-              <input
-                type="text"
-                placeholder="Search TX ID, customer name, rule..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px 9px 34px',
-                  fontSize: '13px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  fontFamily: 'inherit',
-                  backgroundColor: '#fff'
-                }}
-              />
-            </div>
-
-            {/* 2. Risk Range Filter */}
-            <div>
-              <select
-                value={riskRangeFilter}
-                onChange={(e) => setRiskRangeFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  fontSize: '13px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#fff',
-                  color: riskRangeFilter === 'HIGH' ? '#dc2626' : '#334155',
-                  fontWeight: riskRangeFilter !== 'ALL' ? 700 : 500,
-                  cursor: 'pointer',
-                  outline: 'none'
-                }}
-              >
-                <option value="ALL">All Risk Ranges</option>
-                <option value="HIGH">High Risk (&gt; 75)</option>
-                <option value="MODERATE">Moderate Risk (40 - 74)</option>
-                <option value="LOW">Low Risk (&lt; 40)</option>
-              </select>
-            </div>
-
-            {/* 3. Date Filter */}
-            <div>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  fontSize: '13px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#fff',
-                  color: '#334155',
-                  fontWeight: dateFilter !== 'ALL' ? 700 : 500,
-                  cursor: 'pointer',
-                  outline: 'none'
-                }}
-              >
-                <option value="ALL">All Time</option>
-                <option value="TODAY">Today (Last 24h)</option>
-                <option value="WEEK">Last 7 Days</option>
-                <option value="MONTH">Last 30 Days</option>
-              </select>
-            </div>
-
-            {/* 4. Status Filter */}
-            <div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  fontSize: '13px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#fff',
-                  color: '#334155',
-                  fontWeight: statusFilter !== 'ALL' ? 700 : 500,
-                  cursor: 'pointer',
-                  outline: 'none'
-                }}
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="Flagged">Flagged</option>
-                <option value="Under Review">Under Review</option>
-                <option value="Pending Second Approval">Pending 2nd Approval</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-              </select>
-            </div>
-
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-800 cursor-pointer"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="Flagged">Flagged</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
           </div>
-
         </div>
 
-        {/* Flag Items Table */}
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        {/* Table Content */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr style={{
-                backgroundColor: '#f8fafc',
-                color: '#475569',
-                borderBottom: '1px solid #e2e8f0',
-                fontSize: '11px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                <th style={{ padding: '12px 18px', fontWeight: 700 }}>Transaction ID</th>
-                <th style={{ padding: '12px 16px', fontWeight: 700 }}>Customer Name</th>
-                <th style={{ padding: '12px 16px', fontWeight: 700 }}>Triggered Rules</th>
-                <th style={{ padding: '12px 16px', fontWeight: 700 }}>Amount</th>
-                <th style={{ padding: '12px 16px', fontWeight: 700 }}>Risk Score</th>
-                <th style={{ padding: '12px 16px', fontWeight: 700 }}>Status</th>
-                <th style={{ padding: '12px 18px', fontWeight: 700, textAlign: 'right' }}>Action</th>
+              <tr className="bg-slate-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3.5">Transaction ID</th>
+                <th className="px-6 py-3.5">Customer</th>
+                <th className="px-6 py-3.5">Triggered Rules</th>
+                <th className="px-6 py-3.5 text-right">Amount</th>
+                <th className="px-6 py-3.5 text-center">Risk Score</th>
+                <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-3.5 text-right">Action</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100 text-sm">
               {loading && flags.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: '#2563eb' }} />
-                    Loading flagged transactions...
+                  <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                    <div className="flex justify-center items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading flagged transactions...</span>
+                    </div>
                   </td>
                 </tr>
               ) : filteredFlags.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
-                    <ShieldAlert size={36} color="#cbd5e1" style={{ margin: '0 auto 12px auto', display: 'block' }} />
+                  <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                     No transactions match the selected filters.
                   </td>
                 </tr>
               ) : (
-                filteredFlags.map((flag) => {
-                  const scoreBadge = getRiskScoreBadge(flag.riskScore);
-                  const statusBadge = getStatusBadge(flag.status);
-                  const StatusIcon = statusBadge.icon;
-
-                  return (
-                    <tr
-                      key={flag.id}
-                      onClick={() => onSelectFlag && onSelectFlag(flag)}
-                      style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s ease',
-                        backgroundColor: '#fff'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
-                    >
-                      {/* Transaction ID */}
-                      <td style={{ padding: '16px 18px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{
-                            fontFamily: 'monospace',
-                            fontWeight: 800,
-                            color: '#2563eb',
-                            backgroundColor: '#eff6ff',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            fontSize: '12px'
-                          }}>
-                            {flag.transactionId}
+                filteredFlags.map((flag) => (
+                  <tr
+                    key={flag.id}
+                    onClick={() => onSelectFlag && onSelectFlag(flag)}
+                    className="hover:bg-slate-50 border-b border-gray-100 transition-colors cursor-pointer"
+                  >
+                    <td className="px-6 py-4 font-mono font-bold text-xs text-blue-600">
+                      {flag.transactionId}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-gray-900 text-xs">{flag.customerName}</div>
+                      <div className="text-[11px] text-gray-400 font-mono">{flag.customerId}</div>
+                    </td>
+                    <td className="px-6 py-4 max-w-xs">
+                      <div className="flex flex-wrap gap-1">
+                        {flag.triggeredRules?.map((r, i) => (
+                          <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            {r.label}
                           </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right font-bold text-gray-900 text-xs">
+                      {formatCurrency(flag.amount)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="font-bold text-xs text-gray-900 w-8 text-right">{flag.riskScore}</span>
+                        <div className="w-14 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${flag.riskScore >= 70 ? 'bg-red-600' : flag.riskScore >= 40 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${flag.riskScore}%` }}
+                          />
                         </div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
-                          {new Date(flag.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </td>
-
-                      {/* Customer Name */}
-                      <td style={{ padding: '16px 16px', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                          {flag.customerName}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>
-                          {flag.customerId} • {flag.originIp}
-                        </div>
-                      </td>
-
-                      {/* Triggered Rules (Pill-style list) */}
-                      <td style={{ padding: '16px 16px', maxWidth: '300px' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                          {flag.triggeredRules && flag.triggeredRules.length > 0 ? (
-                            flag.triggeredRules.map((rule, rIdx) => {
-                              const isHighRisk = rule.points >= 30;
-                              return (
-                                <span
-                                  key={rIdx}
-                                  title={rule.description || rule.label}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    padding: '3px 8px',
-                                    borderRadius: '12px',
-                                    fontSize: '11px',
-                                    fontWeight: 600,
-                                    backgroundColor: isHighRisk ? '#fee2e2' : '#fef3c7',
-                                    color: isHighRisk ? '#b91c1c' : '#b45309',
-                                    border: `1px solid ${isHighRisk ? '#fca5a5' : '#fde68a'}`,
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                >
-                                  <span style={{
-                                    width: '5px',
-                                    height: '5px',
-                                    borderRadius: '50%',
-                                    backgroundColor: isHighRisk ? '#dc2626' : '#f59e0b'
-                                  }} />
-                                  {rule.label}
-                                </span>
-                              );
-                            })
-                          ) : (
-                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                              Baseline parameters
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Monetary Amount */}
-                      <td style={{ padding: '16px 16px', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>
-                          {formatCurrency(flag.amount)}
-                        </div>
-                        {flag.amount >= 75000 && (
-                          <span style={{
-                            display: 'inline-block',
-                            marginTop: '2px',
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            color: '#b45309',
-                            backgroundColor: '#fef3c7',
-                            padding: '1px 5px',
-                            borderRadius: '4px'
-                          }}>
-                            Dual Maker Gate
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Calculated Risk Score (Prominently Displayed) */}
-                      <td style={{ padding: '16px 16px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div>
-                            <div style={{
-                              display: 'inline-flex',
-                              alignItems: 'baseline',
-                              gap: '2px',
-                              backgroundColor: scoreBadge.bg,
-                              border: `1px solid ${scoreBadge.border}`,
-                              color: scoreBadge.text,
-                              padding: '4px 10px',
-                              borderRadius: '8px',
-                              fontWeight: 900,
-                              fontSize: '14px'
-                            }}>
-                              <span>{flag.riskScore}</span>
-                              <span style={{ fontSize: '10px', opacity: 0.8 }}>/100</span>
-                            </div>
-                            <div style={{
-                              fontSize: '10px',
-                              fontWeight: 800,
-                              color: scoreBadge.text,
-                              marginTop: '2px',
-                              letterSpacing: '0.4px'
-                            }}>
-                              {scoreBadge.label}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td style={{ padding: '16px 16px', whiteSpace: 'nowrap' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                          padding: '4px 9px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          backgroundColor: statusBadge.bg,
-                          color: statusBadge.text
-                        }}>
-                          <StatusIcon size={12} />
-                          {flag.status}
-                        </span>
-                      </td>
-
-                      {/* Action */}
-                      <td style={{ padding: '16px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onSelectFlag) onSelectFlag(flag);
-                          }}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '7px 12px',
-                            backgroundColor: '#2563eb',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 3px rgba(37,99,235,0.3)',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          Breakdown <ChevronRight size={13} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadgeClass(flag.status)}`}>
+                        {flag.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSelectFlag) onSelectFlag(flag);
+                        }}
+                        className="bg-blue-600 text-white hover:bg-blue-700 font-medium px-3 py-1.5 text-xs rounded-md shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1"
+                      >
+                        Breakdown <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
 
-        {/* Table Footer */}
-        <div style={{
-          padding: '14px 24px',
-          backgroundColor: '#f8fafc',
-          borderTop: '1px solid #e2e8f0',
-          fontSize: '12px',
-          color: '#64748b',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div>
-            Showing <strong>{filteredFlags.length}</strong> flagged cases matching criteria
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>Click any transaction row to inspect score breakdown and geolocation anomaly</span>
-          </div>
+        <div className="px-6 py-3 bg-slate-50 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
+          <span>Showing <strong>{filteredFlags.length}</strong> of {flags.length} flagged cases</span>
+          <span>Click any row for deep breakdown</span>
         </div>
-
       </div>
 
     </div>
