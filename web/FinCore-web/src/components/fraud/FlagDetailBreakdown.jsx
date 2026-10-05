@@ -63,10 +63,11 @@ export default function FlagDetailBreakdown({ flag, onBack, onNavigateToCase }) 
     : Math.max(1500, Math.round((txAmount * 0.35) / 500) * 500);
 
   const handleOpenCaseDetail = () => {
+    const targetCaseId = flag.queueId || flag.rawTxId || flag.transactionId || flag.referenceId || flag.id || queueId;
     if (onNavigateToCase) {
-      onNavigateToCase(queueId);
+      onNavigateToCase(targetCaseId, flag);
     } else {
-      navigate(`/analyst/review-queue?caseId=${encodeURIComponent(queueId)}`);
+      navigate(`/analyst/review-queue?tab=case-detail&caseId=${encodeURIComponent(targetCaseId)}`);
     }
   };
 

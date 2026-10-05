@@ -11,6 +11,8 @@ namespace FinCore.Api.Models
         public string Role { get; set; } = "Customer";  // "Customer", "Analyst", or "Admin"
         public string? EmployeeId { get; set; }
         public string? Department { get; set; }
+        public string? Tier { get; set; }
+        public string? JobTitle { get; set; }
         
         // 1. Account Credentials & Security
         public string? PhoneNumber { get; set; }

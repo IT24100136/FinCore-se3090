@@ -46,17 +46,18 @@ namespace FinCore.Api.Controllers
         /// Retrieves notifications for the current authenticated user (or specified query params).
         /// </summary>
         [HttpGet]
-        public async Task<IActionResult> GetMyNotifications([FromQuery] int? userId)
+        public async Task<IActionResult> GetMyNotifications([FromQuery] int? userId, [FromQuery] string? recipient, [FromQuery] Guid? userGuid)
         {
-            var (userGuid, resolvedIntId) = ResolveUserIdentity();
-            int targetUserId = userId ?? resolvedIntId;
-            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+            var (authGuid, resolvedIntId) = ResolveUserIdentity();
+            Guid? effectiveGuid = userGuid ?? authGuid;
+            int targetUserId = userId ?? (effectiveGuid.HasValue ? DbInitializer.GetDeterministicUserId(effectiveGuid.Value) : resolvedIntId);
+            var userEmail = !string.IsNullOrWhiteSpace(recipient) ? recipient : User.FindFirstValue(ClaimTypes.Email);
 
             var query = _context.Notifications.AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(userEmail))
             {
-                query = query.Where(n => n.UserId == targetUserId || n.Recipient == userEmail);
+                query = query.Where(n => n.UserId == targetUserId || n.Recipient.ToLower() == userEmail.ToLower());
             }
             else
             {

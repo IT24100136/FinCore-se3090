@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import RuleConfigurationPanel from '../../components/fraud/RuleConfigurationPanel';
 import FraudFlagList from '../../components/fraud/FraudFlagList';
 import FlagDetailBreakdown from '../../components/fraud/FlagDetailBreakdown';
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function FraudDashboardPage({ initialTab = 'flags' }) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(initialTab); // 'flags' | 'rules' | 'trends' | 'flag-detail'
   const [selectedFlag, setSelectedFlag] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -181,11 +183,11 @@ export default function FraudDashboardPage({ initialTab = 'flags' }) {
             fontSize: '12px',
             fontWeight: 700
           }}>
-            AN
+            {user?.fullName ? user.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'AN'}
           </div>
           <div>
-            <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 600 }}>Fraud Specialist</div>
-            <div style={{ color: '#64748b', fontSize: '11px' }}>ID: USR-11111111</div>
+            <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 600 }}>{user?.fullName || 'Fraud Specialist'}</div>
+            <div style={{ color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>REG: {user?.employeeId || (user?.role === 'Admin' ? 'ADM-001' : 'ANL-001')}</div>
           </div>
         </div>
       </aside>
@@ -272,6 +274,9 @@ export default function FraudDashboardPage({ initialTab = 'flags' }) {
               flag={selectedFlag}
               onBack={handleBackToFlags}
               onDecisionSubmitted={handleDecisionSubmitted}
+              onNavigateToCase={(caseId) => {
+                navigate(`/analyst/review-queue?tab=case-detail&caseId=${encodeURIComponent(caseId)}`);
+              }}
             />
           )}
 

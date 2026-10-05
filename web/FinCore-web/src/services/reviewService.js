@@ -26,13 +26,28 @@ export const reviewService = {
     },
 
     escalateCase: async (transactionId, payload) => {
-        // payload: { analystId, reason }
+        // payload: { analystId, targetAnalystId, targetAnalystName, reason }
         const response = await axios.post(`${API_BASE_URL}/${transactionId}/escalate`, payload);
+        return response.data;
+    },
+
+    getAvailableAnalysts: async () => {
+        const response = await axios.get('/api/users/staff');
         return response.data;
     },
 
     getHistory: async (transactionId) => {
         const response = await axios.get(`${API_BASE_URL}/${transactionId}/history`);
+        return response.data;
+    },
+
+    getDecisionHistory: async () => {
+        const response = await axios.get(`${API_BASE_URL}/history`);
+        return response.data;
+    },
+
+    getCaseById: async (id) => {
+        const response = await axios.get(`${API_BASE_URL}/cases/${id}`);
         return response.data;
     },
 

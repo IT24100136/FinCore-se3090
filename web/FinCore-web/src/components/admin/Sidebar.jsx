@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { 
   BarChart3, 
   Users, 
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar({ activeView, setActiveView, flaggedCount = 24 }) {
+  const { user, logout } = useAuth();
   const navItems = [
     {
       id: 'analytics',
@@ -139,11 +141,12 @@ export default function Sidebar({ activeView, setActiveView, flaggedCount = 24 }
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0B132B]"></span>
           </div>
           <div>
-            <div className="text-xs font-bold text-white leading-tight">Alex Morgan</div>
-            <div className="text-[10px] text-slate-400">Security Operations</div>
+            <div className="text-xs font-bold text-white leading-tight">{user?.fullName || 'Alex Morgan'}</div>
+            <div className="text-[10px] text-slate-400 font-mono">REG: {user?.employeeId || 'ADM-001'}</div>
           </div>
         </div>
         <button 
+          onClick={logout}
           title="Sign Out"
           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
         >

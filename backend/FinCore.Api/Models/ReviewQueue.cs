@@ -43,6 +43,10 @@ namespace FinCore.Api.Models
 
         public Guid? AssignedAnalystId { get; set; }
 
+        public Guid? EscalatedByAnalystId { get; set; }
+
+        public string? EscalationReason { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
     }

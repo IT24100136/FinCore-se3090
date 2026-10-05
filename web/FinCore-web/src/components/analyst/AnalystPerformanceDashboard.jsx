@@ -52,8 +52,8 @@ export default function AnalystPerformanceDashboard({ metrics = {}, queue = [] }
 
   // 3. Horizontal Bar Chart Data: Throughput by Analyst ID
   const analystThroughputData = [
-    { analystId: 'ADM-9001', name: 'Lead Admin', cases: Math.max(approvedCount, 4) },
-    { analystId: 'ANL-1001', name: 'Diluni Silva', cases: 6 },
+    { analystId: 'ADM-001', name: 'Lead Admin', cases: Math.max(approvedCount, 4) },
+    { analystId: 'ANL-001', name: 'Diluni Silva', cases: 6 },
     { analystId: 'ANL-002', name: 'Investigator 2', cases: 3 },
     { analystId: 'ANL-003', name: 'Junior Analyst', cases: 2 },
   ];

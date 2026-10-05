@@ -89,6 +89,13 @@ namespace FinCore.Api.Controllers
                 resolvedRole = "Admin";
             }
 
+            if ((resolvedRole == "Admin" || resolvedRole == "Analyst") && string.IsNullOrWhiteSpace(cleanEmployeeId))
+            {
+                var count = await _context.Users.CountAsync(u => u.Role == resolvedRole) + 1;
+                var prefix = resolvedRole == "Admin" ? "ADM" : "ANL";
+                cleanEmployeeId = $"{prefix}-{count:D3}";
+            }
+
             var displayName = !string.IsNullOrWhiteSpace(request.FullName)
                 ? request.FullName.Trim()
                 : (!string.IsNullOrWhiteSpace(request.Name) ? request.Name.Trim() : normalizedEmail.Split('@')[0]);
@@ -180,11 +187,18 @@ namespace FinCore.Api.Controllers
             }
 
             var identifier = request.Email.Trim().ToLower();
+            var normId = identifier.ToUpper();
 
-            // Match by Email OR Employee ID
+            // Match by Email OR Employee ID (accepts standard ANL-001, ADM-001, etc.)
             var user = await _context.Users.FirstOrDefaultAsync(u =>
                 u.Email.ToLower() == identifier ||
-                (u.EmployeeId != null && u.EmployeeId.ToLower() == identifier));
+                (u.EmployeeId != null && (
+                    u.EmployeeId.ToLower() == identifier ||
+                    (normId == "ANL-001" && (u.EmployeeId.ToUpper() == "ANL-1001" || u.EmployeeId.ToUpper() == "ANL-001")) ||
+                    (normId == "ANL-1001" && (u.EmployeeId.ToUpper() == "ANL-1001" || u.EmployeeId.ToUpper() == "ANL-001")) ||
+                    (normId == "ADM-001" && (u.EmployeeId.ToUpper() == "ADM-9001" || u.EmployeeId.ToUpper() == "ADM-001")) ||
+                    (normId == "ADM-9001" && (u.EmployeeId.ToUpper() == "ADM-9001" || u.EmployeeId.ToUpper() == "ADM-001"))
+                )));
 
             if (user == null)
             {

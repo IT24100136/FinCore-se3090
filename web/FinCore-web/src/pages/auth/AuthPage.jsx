@@ -100,10 +100,10 @@ export default function AuthPage() {
     setMode('login');
     setErrorMessage('');
     if (role === 'Analyst') {
-      setLoginIdentifier('ANL-1001');
+      setLoginIdentifier('ANL-001');
       setLoginPassword('Password123!');
     } else if (role === 'Admin') {
-      setLoginIdentifier('ADM-9001');
+      setLoginIdentifier('ADM-001');
       setLoginPassword('AdminPassword123!');
     }
   };
@@ -154,7 +154,7 @@ export default function AuthPage() {
       return;
     }
     if (!formData.employeeId.trim() || formData.employeeId === 'ANL-' || formData.employeeId === 'ADM-') {
-      setErrorMessage('A valid Employee Badge ID (e.g. ANL-1024 or ADM-9021) is required.');
+      setErrorMessage('A valid Employee Badge ID (e.g. ANL-001 or ADM-001) is required.');
       return;
     }
     if (!passwordChecks.length || !passwordChecks.hasUpper || !passwordChecks.hasNumber || !passwordChecks.hasSpecial) {
@@ -284,7 +284,7 @@ export default function AuthPage() {
                   transition: 'all 0.2s'
                 }}
               >
-                ⚡ Fill Fraud Analyst (ANL-1001)
+                ⚡ Fill Fraud Analyst (ANL-001)
               </button>
               <button
                 type="button"
@@ -301,7 +301,7 @@ export default function AuthPage() {
                   transition: 'all 0.2s'
                 }}
               >
-                ⚡ Fill System Admin (ADM-9001)
+                ⚡ Fill System Admin (ADM-001)
               </button>
             </div>
           </div>
@@ -427,7 +427,7 @@ export default function AuthPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. diluni.silva@fincore.internal or ANL-1001"
+                    placeholder="e.g. diluni.silva@fincore.internal or ANL-001"
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
                     style={{
@@ -703,7 +703,7 @@ export default function AuthPage() {
                     <input
                       type="text"
                       required
-                      placeholder={formData.role === 'System Admin' ? 'ADM-XXXX' : 'ANL-XXXX'}
+                      placeholder={formData.role === 'System Admin' ? 'ADM-001' : 'ANL-001'}
                       value={formData.employeeId}
                       onChange={(e) => setFormData({ ...formData, employeeId: e.target.value.toUpperCase() })}
                       style={{

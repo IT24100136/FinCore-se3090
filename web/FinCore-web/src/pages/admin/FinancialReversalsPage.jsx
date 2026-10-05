@@ -104,7 +104,7 @@ export default function FinancialReversalsPage() {
         headers,
         body: JSON.stringify({
           reason: reversalReason.trim(),
-          adminId: user?.employeeId || user?.email || 'ADM-LEAD-01'
+          adminId: user?.employeeId || 'ADM-001'
         })
       });
 

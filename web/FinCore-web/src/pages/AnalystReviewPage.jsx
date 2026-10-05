@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { reviewService } from '../services/reviewService';
 import TransactionMap from '../components/TransactionMap';
@@ -46,6 +46,7 @@ import {
 
 export default function AnalystReviewPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { user } = useAuth();
     const isAdmin = user?.role === 'Admin';
     const [activeTab, setActiveTab] = useState('review-queue'); // 'review-queue' | 'case-detail' | 'analytics' | 'audit-logs'
@@ -74,7 +75,21 @@ export default function AnalystReviewPage() {
         averageDecisionTimeMinutes: 4.2
     });
 
-    const currentAnalystId = "11111111-1111-1111-1111-111111111111";
+    const currentAnalystId = user?.id || "22222222-2222-2222-2222-222222222222";
+    const currentAnalystEmpId = user?.employeeId || "ANL-001";
+    const currentAnalystName = user?.fullName || user?.name || user?.email || "Analyst";
+
+    // Escalation Modal & Staff Selection states
+    const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
+    const [availableAnalysts, setAvailableAnalysts] = useState([]);
+    const [selectedTargetAnalystId, setSelectedTargetAnalystId] = useState('');
+    const [escalationNotes, setEscalationNotes] = useState('');
+    const [isLoadingAnalysts, setIsLoadingAnalysts] = useState(false);
+    const [isSubmittingEscalation, setIsSubmittingEscalation] = useState(false);
+
+    // Live In-App Notifications state
+    const [notifications, setNotifications] = useState([]);
+    const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
 
     // Format and normalize a case from either DB or fallback
     const normalizeCase = (item, idx) => {
@@ -105,7 +120,26 @@ export default function AnalystReviewPage() {
         const txCode = (item.queueCode && item.queueCode.startsWith('TRX'))
             ? item.queueCode
             : (txIdStr.length > 8 ? `TX-${txIdStr.substring(0, 8).toUpperCase()}` : (txIdStr || `TX-8829${1 - idx}`));
-        const isAssignedToMe = item.assignedAnalystId === currentAnalystId;
+
+        const isAssignedToMe = Boolean(
+            (item.assignedAnalystId && String(item.assignedAnalystId).toLowerCase() === String(currentAnalystId).toLowerCase()) ||
+            (user?.fullName && item.assignedAnalystName && item.assignedAnalystName.toLowerCase() === user.fullName.toLowerCase())
+        );
+
+        let displayAssigned = 'Unassigned';
+        if (item.status === 'Escalated') {
+            if (isAssignedToMe) {
+                displayAssigned = `Assigned to you by ${item.escalatedByName || 'Analyst'}`;
+            } else {
+                displayAssigned = `Escalated to: ${item.assignedAnalystName || 'Senior Analyst'}`;
+            }
+        } else if (isAssignedToMe) {
+            displayAssigned = 'Assigned to You';
+        } else if (item.assignedAnalystName) {
+            displayAssigned = item.assignedAnalystName;
+        } else if (item.assignedAnalystId) {
+            displayAssigned = 'Assigned';
+        }
 
         return {
             ...item,
@@ -119,7 +153,10 @@ export default function AnalystReviewPage() {
             recipientName: item.recipientName ? `${item.recipientName} (${item.recipientId || 'USR-2187'})` : 'M. Fernando (USR-2187)',
             amount: Number(item.amount) || 75000,
             riskScore: Number(item.riskScore) || 87,
-            assignedAnalyst: isAssignedToMe ? 'Assigned to You' : (item.assignedAnalystId ? 'Analyst_02' : 'Unassigned'),
+            assignedAnalyst: displayAssigned,
+            assignedAnalystName: item.assignedAnalystName,
+            escalatedByName: item.escalatedByName,
+            escalationReason: item.escalationReason,
             isAssignedToMe: isAssignedToMe,
             assignedAnalystId: item.assignedAnalystId,
             originIp: item.originIp || '203.143.88.71',
@@ -171,8 +208,26 @@ export default function AnalystReviewPage() {
         }
     };
 
+    const loadNotifications = async () => {
+        try {
+            const params = {};
+            if (currentAnalystId) {
+                params.userGuid = currentAnalystId;
+            }
+            if (user?.email) {
+                params.recipient = user.email;
+            }
+            const res = await axios.get('/api/notifications', { params });
+            const items = res.data?.items || [];
+            setNotifications(items);
+        } catch (e) {
+            // Non-critical background fetch
+        }
+    };
+
     useEffect(() => {
         loadData();
+        loadNotifications();
         const interval = setInterval(() => {
             reviewService.getQueue().then(data => {
                 const allItems = data.items || [];
@@ -180,9 +235,40 @@ export default function AnalystReviewPage() {
                 const enriched = validItems.map((item, index) => normalizeCase(item, index));
                 setQueue(enriched);
             }).catch(e => console.error("Silent queue refresh error:", e));
+            loadNotifications();
         }, 3000);
         return () => clearInterval(interval);
     }, []);
+
+    useEffect(() => {
+        const caseIdParam = searchParams.get('caseId');
+        const tabParam = searchParams.get('tab');
+        if (caseIdParam) {
+            setActiveTab('case-detail');
+            const match = queue.find(q => 
+                q.queueId === caseIdParam || 
+                q.transactionId === caseIdParam || 
+                q.queueCode === caseIdParam ||
+                q.txCode === caseIdParam ||
+                String(q.id) === String(caseIdParam)
+            );
+            if (match) {
+                setSelectedCase(match);
+                loadHistory(match.transactionId);
+            } else {
+                reviewService.getCaseById(caseIdParam).then(res => {
+                    const raw = res.item || res;
+                    if (raw && (raw.transactionId || raw.queueCode)) {
+                        const normalized = normalizeCase(raw, queue.length);
+                        setSelectedCase(normalized);
+                        loadHistory(normalized.transactionId);
+                    }
+                }).catch(e => console.warn("Failed to load case by param:", e));
+            }
+        } else if (tabParam) {
+            setActiveTab(tabParam);
+        }
+    }, [searchParams, queue.length]);
 
     const handleOpenCase = (item) => {
         setSelectedCase(item);
@@ -208,8 +294,97 @@ export default function AnalystReviewPage() {
         }
     };
 
+    const handleOpenEscalateModal = async () => {
+        if (!selectedCase) return;
+        setIsEscalateModalOpen(true);
+        setEscalationNotes(notes.trim() || 'Escalation to senior analyst for in-depth fraud investigation.');
+        setIsLoadingAnalysts(true);
+        try {
+            const staff = await reviewService.getAvailableAnalysts();
+            const eligibleStaff = Array.isArray(staff)
+                ? staff.filter(s => s.role === 'Admin' || s.role === 'Analyst' || s.role === 'Fraud Analyst' || s.role === 'System Admin')
+                : [];
+            setAvailableAnalysts(eligibleStaff);
+
+            const otherStaff = eligibleStaff.filter(s => String(s.id).toLowerCase() !== String(currentAnalystId).toLowerCase());
+            if (otherStaff.length > 0) {
+                setSelectedTargetAnalystId(otherStaff[0].id);
+            } else if (eligibleStaff.length > 0) {
+                setSelectedTargetAnalystId(eligibleStaff[0].id);
+            }
+        } catch (err) {
+            console.error("Failed to load analysts from database:", err);
+        } finally {
+            setIsLoadingAnalysts(false);
+        }
+    };
+
+    const handleConfirmEscalation = async () => {
+        if (!selectedCase) return;
+        if (!selectedTargetAnalystId) {
+            alert("Please select a recipient analyst from the list.");
+            return;
+        }
+        if (!escalationNotes.trim()) {
+            alert("Please provide an escalation rationale / reason.");
+            return;
+        }
+
+        setIsSubmittingEscalation(true);
+        try {
+            const target = availableAnalysts.find(a => String(a.id).toLowerCase() === String(selectedTargetAnalystId).toLowerCase());
+            const targetName = target ? target.name : 'Senior Analyst';
+
+            await reviewService.escalateCase(selectedCase.transactionId, {
+                analystId: currentAnalystId,
+                targetAnalystId: selectedTargetAnalystId,
+                targetAnalystName: targetName,
+                reason: escalationNotes.trim()
+            });
+
+            const isAssignedToMe = String(selectedTargetAnalystId).toLowerCase() === String(currentAnalystId).toLowerCase();
+            const updatedCase = {
+                ...selectedCase,
+                status: 'Escalated',
+                priority: 'CRITICAL',
+                assignedAnalystId: selectedTargetAnalystId,
+                assignedAnalystName: targetName,
+                escalatedByName: currentAnalystName,
+                escalationReason: escalationNotes.trim(),
+                assignedAnalyst: isAssignedToMe
+                    ? `Assigned to you by ${currentAnalystName}`
+                    : `Escalated to: ${targetName}`,
+                isAssignedToMe: isAssignedToMe
+            };
+
+            setSelectedCase(updatedCase);
+            setQueue(prev => prev.map(q => (q.id === selectedCase.id || q.transactionId === selectedCase.transactionId) ? updatedCase : q));
+
+            setActionFeedback({
+                type: 'escalate',
+                message: `Case ${selectedCase.queueId} escalated to ${targetName} with CRITICAL priority.`
+            });
+
+            setIsEscalateModalOpen(false);
+            setNotes('');
+            loadHistory(selectedCase.transactionId);
+            await loadData();
+            await loadNotifications();
+        } catch (err) {
+            console.error("Escalation failed:", err);
+            alert("Escalation failed: " + (err.response?.data?.message || err.message));
+        } finally {
+            setIsSubmittingEscalation(false);
+        }
+    };
+
     const handleDecision = async (decision) => {
         if (!selectedCase) return;
+
+        if (decision === 'Escalate') {
+            handleOpenEscalateModal();
+            return;
+        }
 
         if (!notes.trim()) {
             alert("Analyst Notes are mandatory to record the review rationale before submitting a decision.");
@@ -217,16 +392,7 @@ export default function AnalystReviewPage() {
         }
 
         try {
-            if (decision === 'Escalate') {
-                await reviewService.escalateCase(selectedCase.transactionId, {
-                    analystId: currentAnalystId,
-                    reason: notes
-                });
-                setActionFeedback({
-                    type: 'escalate',
-                    message: `Case ${selectedCase.queueId} escalated to Senior Admin with CRITICAL priority.`
-                });
-            } else if (decision === 'Request More Info') {
+            if (decision === 'Request More Info') {
                 await reviewService.decideCase(selectedCase.transactionId, {
                     analystId: currentAnalystId,
                     decision: 'Request More Info',
@@ -236,6 +402,18 @@ export default function AnalystReviewPage() {
                 setActionFeedback({
                     type: 'info',
                     message: `Information requested from customer/branch for case ${selectedCase.queueId}.`
+                });
+            } else if (selectedCase.status === 'PendingSecondApproval') {
+                // Secondary approval path (Maker-Checker Level 2)
+                await reviewService.secondApproval(selectedCase.transactionId, {
+                    secondAnalystId: currentAnalystId,
+                    analystId: currentAnalystId,
+                    decision: decision,
+                    notes: notes
+                });
+                setActionFeedback({
+                    type: decision === 'Approved' ? 'approved' : 'rejected',
+                    message: `Secondary approval (Level 2) [${decision}] successfully executed for ${selectedCase.queueId}. Transaction is now finalized.`
                 });
             } else {
                 const result = await reviewService.decideCase(selectedCase.transactionId, {
@@ -499,11 +677,11 @@ export default function AnalystReviewPage() {
                 {/* Bottom User Profile */}
                 <div style={{ padding: '16px', borderTop: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700 }}>
-                        AN
+                        {user?.fullName ? user.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'AN'}
                     </div>
                     <div style={{ overflow: 'hidden' }}>
-                        <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 600 }}>Analyst Console</div>
-                        <div style={{ color: '#64748b', fontSize: '11px' }}>ID: USR-11111111</div>
+                        <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 600 }}>{user?.fullName || 'Analyst Console'}</div>
+                        <div style={{ color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>REG: {user?.employeeId || (user?.role === 'Admin' ? 'ADM-001' : 'ANL-001')}</div>
                     </div>
                 </div>
             </aside>
@@ -567,24 +745,111 @@ export default function AnalystReviewPage() {
                         </div>
 
                         {/* Real-time Notification Bell */}
-                        <div
-                            style={{
-                                position: 'relative',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '8px',
-                                backgroundColor: '#070c18',
-                                border: '1px solid #1e293b'
-                            }}
-                            title="Active Alerts"
-                            onClick={() => alert(`Active Queue: ${metrics.critical || 1} CRITICAL priority cases require immediate analyst action.`)}
-                        >
-                            <Bell size={16} color="#94a3b8" />
-                            <span style={{ position: 'absolute', top: '7px', right: '7px', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#ef4444', border: '1px solid #0d1527' }} />
+                        <div style={{ position: 'relative' }}>
+                            <div
+                                style={{
+                                    position: 'relative',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#070c18',
+                                    border: '1px solid #1e293b'
+                                }}
+                                title="Active Alerts & Escalations"
+                                onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
+                            >
+                                <Bell size={16} color="#94a3b8" />
+                                {notifications.filter(n => !n.isRead).length > 0 && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-4px',
+                                        right: '-4px',
+                                        minWidth: '16px',
+                                        height: '16px',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#ef4444',
+                                        color: '#ffffff',
+                                        fontSize: '10px',
+                                        fontWeight: 800,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '0 4px',
+                                        border: '1.5px solid #070c18'
+                                    }}>
+                                        {notifications.filter(n => !n.isRead).length}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Notifications Dropdown Popover */}
+                            {isNotifDropdownOpen && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '42px',
+                                    right: '0',
+                                    width: '360px',
+                                    backgroundColor: '#ffffff',
+                                    borderRadius: '10px',
+                                    boxShadow: '0 12px 28px rgba(0,0,0,0.2)',
+                                    border: '1px solid #cbd5e1',
+                                    zIndex: 2000,
+                                    overflow: 'hidden'
+                                }}>
+                                    <div style={{
+                                        padding: '12px 16px',
+                                        borderBottom: '1px solid #e2e8f0',
+                                        backgroundColor: '#f8fafc',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
+                                            Analyst Case Notifications
+                                        </div>
+                                        <button
+                                            onClick={() => setIsNotifDropdownOpen(false)}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '13px' }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                        {notifications.length === 0 ? (
+                                            <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                                                No notifications at this time.
+                                            </div>
+                                        ) : (
+                                            notifications.map(n => (
+                                                <div
+                                                    key={n.id}
+                                                    style={{
+                                                        padding: '12px 16px',
+                                                        borderBottom: '1px solid #f1f5f9',
+                                                        backgroundColor: n.isRead ? '#ffffff' : '#f0fdf4'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                        <span style={{ fontWeight: 700, fontSize: '12px', color: '#0f172a' }}>
+                                                            {n.title}
+                                                        </span>
+                                                        <span style={{ fontSize: '10px', color: '#64748b' }}>
+                                                            {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                    <p style={{ margin: 0, fontSize: '12px', color: '#334155', lineHeight: 1.4 }}>
+                                                        {n.message}
+                                                    </p>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Date */}
@@ -753,12 +1018,24 @@ export default function AnalystReviewPage() {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '14px 20px' }}>
-                                                        {item.isAssignedToMe ? (
+                                                        {item.status === 'Escalated' ? (
+                                                            item.isAssignedToMe ? (
+                                                                <span style={{ color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <UserCheck size={14} /> Assigned to you by {item.escalatedByName || 'Analyst'}
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ color: '#d97706', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <ArrowUpRight size={14} /> Escalated to: {item.assignedAnalystName || 'Analyst'}
+                                                                </span>
+                                                            )
+                                                        ) : item.isAssignedToMe ? (
                                                             <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                                 <UserCheck size={14} /> You
                                                             </span>
+                                                        ) : item.assignedAnalystName ? (
+                                                            <span style={{ color: '#334155', fontWeight: 600 }}>{item.assignedAnalystName}</span>
                                                         ) : item.assignedAnalystId ? (
-                                                            <span style={{ color: '#334155' }}>Analyst 02</span>
+                                                            <span style={{ color: '#334155' }}>Assigned</span>
                                                         ) : (
                                                             <button
                                                                 onClick={(e) => handleAssignToMe(item, e)}
@@ -1033,10 +1310,66 @@ export default function AnalystReviewPage() {
                                     <div style={{ backgroundColor: '#fff', borderRadius: '10px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
                                             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Transaction Details</h3>
-                                            <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 700 }}>
-                                                • {selectedCase.status.toUpperCase()}
-                                            </span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                {selectedCase.status === 'Escalated' && (
+                                                    <span style={{
+                                                        backgroundColor: '#fef3c7',
+                                                        color: '#b45309',
+                                                        padding: '4px 12px',
+                                                        borderRadius: '12px',
+                                                        fontSize: '12px',
+                                                        fontWeight: 700,
+                                                        border: '1px solid #fde68a',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}>
+                                                        <ArrowUpRight size={14} />
+                                                        {selectedCase.isAssignedToMe
+                                                            ? `Assigned to you by ${selectedCase.escalatedByName || 'Analyst'}`
+                                                            : `Escalated to: ${selectedCase.assignedAnalystName || selectedCase.assignedAnalyst || 'Senior Analyst'}`}
+                                                    </span>
+                                                )}
+                                                <span style={{
+                                                    backgroundColor: selectedCase.status === 'Escalated' ? '#fee2e2' : '#fef3c7',
+                                                    color: selectedCase.status === 'Escalated' ? '#dc2626' : '#b45309',
+                                                    padding: '4px 12px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 700
+                                                }}>
+                                                    • {selectedCase.status.toUpperCase()}
+                                                </span>
+                                            </div>
                                         </div>
+
+                                        {/* Escalation Context Banner */}
+                                        {selectedCase.status === 'Escalated' && (
+                                            <div style={{
+                                                marginBottom: '20px',
+                                                padding: '12px 16px',
+                                                backgroundColor: '#fffbeb',
+                                                border: '1px solid #fde68a',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                alignItems: 'flex-start',
+                                                gap: '12px',
+                                                fontSize: '13px'
+                                            }}>
+                                                <ArrowUpRight size={18} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 700, color: '#92400e', marginBottom: '2px' }}>
+                                                        {selectedCase.isAssignedToMe
+                                                            ? `Case Assigned to You by ${selectedCase.escalatedByName || 'Senior Analyst'}`
+                                                            : `Case Escalated to: ${selectedCase.assignedAnalystName || selectedCase.assignedAnalyst || 'Senior Analyst'}`}
+                                                    </div>
+                                                    <div style={{ color: '#78350f', fontSize: '12px' }}>
+                                                        <span style={{ fontWeight: 600 }}>Escalation Reason: </span>
+                                                        {selectedCase.escalationReason || 'Senior investigation requested for elevated fraud indicators.'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '18px', fontSize: '13px' }}>
                                             <div>
@@ -1150,7 +1483,7 @@ export default function AnalystReviewPage() {
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '12px', color: '#475569', marginBottom: '4px' }}>
-                                                            <strong>Analyst ID:</strong> {item.analystId}
+                                                            <strong>Analyst:</strong> {item.analystName ? `${item.analystName} (${item.analystEmpId || (item.analystId && !item.analystId.includes('-') ? item.analystId : 'ANL-001')})` : (item.analystEmpId || (item.analystId && !item.analystId.includes('-') ? item.analystId : 'ANL-001'))}
                                                         </div>
                                                         <div style={{ fontSize: '12px', color: '#334155', fontStyle: 'italic' }}>
                                                             "{item.notes || 'No review notes entered.'}"
@@ -1230,7 +1563,7 @@ export default function AnalystReviewPage() {
                                                     transition: 'all 0.15s ease'
                                                 }}
                                             >
-                                                <CheckCircle size={17} /> Approve & Release Funds
+                                                <CheckCircle size={17} /> {selectedCase.status === 'PendingSecondApproval' ? 'Confirm Second Approval (Level 2) & Release Funds' : 'Approve & Release Funds'}
                                             </button>
 
                                             <button
@@ -1278,13 +1611,13 @@ export default function AnalystReviewPage() {
                                             </button>
 
                                             <button
-                                                onClick={() => handleDecision('Escalate')}
+                                                onClick={handleOpenEscalateModal}
                                                 style={{
-                                                    backgroundColor: '#f8fafc',
-                                                    color: '#475569',
+                                                    backgroundColor: '#fffbeb',
+                                                    color: '#b45309',
                                                     padding: '12px',
                                                     borderRadius: '6px',
-                                                    border: '1px solid #cbd5e1',
+                                                    border: '1px solid #fde68a',
                                                     fontWeight: 700,
                                                     fontSize: '13px',
                                                     cursor: 'pointer',
@@ -1295,7 +1628,7 @@ export default function AnalystReviewPage() {
                                                     transition: 'all 0.15s ease'
                                                 }}
                                             >
-                                                <ArrowUpRight size={17} /> Escalate to Senior Admin
+                                                <ArrowUpRight size={17} /> Escalate Case
                                             </button>
                                         </div>
                                     </div>
@@ -1318,15 +1651,37 @@ export default function AnalystReviewPage() {
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                                             <span style={{ color: '#64748b' }}>Assigned To</span>
-                                            <span style={{ fontWeight: 600 }}>{selectedCase.assignedAnalyst}</span>
+                                            <span style={{
+                                                fontWeight: 700,
+                                                color: selectedCase.status === 'Escalated' ? '#d97706' : '#0f172a',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                {selectedCase.status === 'Escalated'
+                                                    ? (selectedCase.isAssignedToMe
+                                                        ? `Assigned to you by ${selectedCase.escalatedByName || 'Analyst'}`
+                                                        : `Escalated to: ${selectedCase.assignedAnalystName || selectedCase.assignedAnalyst || 'Senior Analyst'}`)
+                                                    : (selectedCase.assignedAnalyst || 'Unassigned')}
+                                            </span>
                                         </div>
+                                        {selectedCase.status === 'Escalated' && selectedCase.escalationReason && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                                <span style={{ color: '#64748b' }}>Escalation Reason</span>
+                                                <span style={{ fontWeight: 600, color: '#b45309', fontSize: '12px', textAlign: 'right', maxWidth: '200px' }}>
+                                                    {selectedCase.escalationReason}
+                                                </span>
+                                            </div>
+                                        )}
                                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
                                             <span style={{ color: '#64748b' }}>Elapsed</span>
                                             <span style={{ fontWeight: 600, color: '#0f172a' }}>{calculateElapsed(selectedCase.createdAt)}</span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
                                             <span style={{ color: '#64748b' }}>Status</span>
-                                            <span style={{ fontWeight: 700, color: '#2563eb' }}>{selectedCase.status}</span>
+                                            <span style={{ fontWeight: 700, color: selectedCase.status === 'Escalated' ? '#dc2626' : '#2563eb' }}>
+                                                {selectedCase.status}
+                                            </span>
                                         </div>
                                     </div>
 
@@ -1351,6 +1706,7 @@ export default function AnalystReviewPage() {
                     {/* ============================================================== */}
                     {activeTab === 'audit-logs' && (
                         <DecisionHistoryTable
+                            fetchLive={true}
                             queue={queue}
                             onRefresh={loadData}
                             onOpenCase={handleOpenCase}
@@ -1389,13 +1745,62 @@ export default function AnalystReviewPage() {
                         <FlagDetailBreakdown
                             flag={selectedFraudFlag}
                             onBack={() => setActiveTab('fraud-flags')}
-                            onNavigateToCase={(caseId) => {
-                                const found = queue.find(q => q.queueId === caseId || q.transactionId === caseId || String(q.id) === String(caseId));
+                            onNavigateToCase={async (caseId, flagData) => {
+                                const target = caseId || flagData?.queueId || flagData?.transactionId || flagData?.rawTxId;
+                                const src = flagData || selectedFraudFlag || {};
+
+                                // 1. Check in loaded queue
+                                const found = queue.find(q => 
+                                    q.queueId === target || 
+                                    q.transactionId === target || 
+                                    q.queueCode === target ||
+                                    q.txCode === target ||
+                                    String(q.id) === String(target) ||
+                                    (src.transactionId && q.transactionId === src.transactionId) ||
+                                    (src.queueId && q.queueId === src.queueId)
+                                );
+
                                 if (found) {
                                     handleOpenCase(found);
-                                } else {
-                                    setActiveTab('review-queue');
+                                    return;
                                 }
+
+                                // 2. Query backend database directly
+                                try {
+                                    if (target) {
+                                        const res = await reviewService.getCaseById(target);
+                                        const rawItem = res.item || res;
+                                        if (rawItem && (rawItem.transactionId || rawItem.queueCode)) {
+                                            const normalized = normalizeCase(rawItem, queue.length);
+                                            handleOpenCase(normalized);
+                                            return;
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.warn("Direct case DB lookup failed, falling back to flag data:", err);
+                                }
+
+                                // 3. Build synthetic high-fidelity case from flag so user is directly taken to Case Detail!
+                                const syntheticCase = normalizeCase({
+                                    id: src.id || target || `case-${Date.now()}`,
+                                    transactionId: src.transactionId || target || `tx-${Date.now()}`,
+                                    queueCode: src.queueId || src.rawTxId || target || 'Q-104',
+                                    amount: Number(src.amount) || 75000,
+                                    senderName: src.customerName || src.senderName || 'Verified Sender',
+                                    senderId: src.customerId || src.senderId || 'USR-4421',
+                                    recipientName: src.recipientName || 'Verified Beneficiary',
+                                    recipientId: src.recipientId || 'USR-2187',
+                                    riskScore: Number(src.riskScore) || 85,
+                                    originIp: src.originIp || '203.143.88.71',
+                                    device: src.device || 'Pixel 7 — Android 14',
+                                    latitude: src.latitude || 6.9319,
+                                    longitude: src.longitude || 79.8478,
+                                    status: src.status || 'Under Review',
+                                    flagReasonsJson: src.triggeredRules ? JSON.stringify(src.triggeredRules) : src.flagReasonsJson,
+                                    createdAt: src.timestamp || new Date().toISOString()
+                                }, queue.length);
+
+                                handleOpenCase(syntheticCase);
                             }}
                         />
                     )}
@@ -1423,6 +1828,195 @@ export default function AnalystReviewPage() {
 
                 </div>
             </main>
+
+            {/* ============================================================== */}
+            {/* ESCALATE CASE MODAL (Deliverable: Select Available Analyst)      */}
+            {/* ============================================================== */}
+            {isEscalateModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                    backdropFilter: 'blur(5px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    padding: '16px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '12px',
+                        width: '100%',
+                        maxWidth: '520px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+                        border: '1px solid #cbd5e1',
+                        overflow: 'hidden'
+                    }}>
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '20px 24px',
+                            borderBottom: '1px solid #e2e8f0',
+                            backgroundColor: '#f8fafc',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '8px',
+                                    backgroundColor: '#fef3c7',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#d97706'
+                                }}>
+                                    <ArrowUpRight size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
+                                        Escalate Case
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                                        Case: <strong style={{ color: '#2563eb' }}>{selectedCase?.queueId}</strong> • Amount: <strong>Rs. {Number(selectedCase?.amount || 0).toLocaleString()}</strong>
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsEscalateModalOpen(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '18px', padding: '4px' }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                                    Select Analyst:
+                                </label>
+                                {isLoadingAnalysts ? (
+                                    <div style={{ padding: '12px', fontSize: '13px', color: '#64748b', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <RefreshCw size={14} className="animate-spin" /> Querying eligible staff from database...
+                                    </div>
+                                ) : availableAnalysts.length === 0 ? (
+                                    <div style={{ padding: '12px', fontSize: '13px', color: '#ef4444', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fee2e2' }}>
+                                        No eligible analysts or administrators found in database.
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={selectedTargetAnalystId}
+                                        onChange={(e) => setSelectedTargetAnalystId(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            borderRadius: '8px',
+                                            border: '1px solid #cbd5e1',
+                                            fontSize: '13px',
+                                            fontWeight: 600,
+                                            color: '#0f172a',
+                                            backgroundColor: '#fff',
+                                            outline: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {availableAnalysts.map((a) => {
+                                            const isSelf = String(a.id).toLowerCase() === String(currentAnalystId).toLowerCase();
+                                            const roleDetail = a.jobTitle || a.role || 'Analyst';
+                                            const empCode = a.employeeId || (a.role === 'Admin' ? 'ADM-001' : 'ANL-001');
+                                            return (
+                                                <option key={a.id} value={a.id}>
+                                                    {a.name} ({roleDetail} • {empCode}){isSelf ? ' — (You)' : ''}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                )}
+                                <span style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: '#64748b' }}>
+                                    Dynamic database retrieval based on PostgreSQL staff identity and role permissions.
+                                </span>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                                    Escalation Reason / Notes:
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    value={escalationNotes}
+                                    onChange={(e) => setEscalationNotes(e.target.value)}
+                                    placeholder="Enter reason for escalating this case to the selected analyst..."
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        padding: '10px 14px',
+                                        borderRadius: '8px',
+                                        border: '1px solid #cbd5e1',
+                                        fontSize: '13px',
+                                        fontFamily: 'inherit',
+                                        resize: 'vertical',
+                                        outline: 'none'
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Modal Footer Actions */}
+                        <div style={{
+                            padding: '16px 24px',
+                            borderTop: '1px solid #e2e8f0',
+                            backgroundColor: '#f8fafc',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '12px'
+                        }}>
+                            <button
+                                onClick={() => setIsEscalateModalOpen(false)}
+                                disabled={isSubmittingEscalation}
+                                style={{
+                                    padding: '9px 18px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #cbd5e1',
+                                    backgroundColor: '#ffffff',
+                                    color: '#475569',
+                                    fontWeight: 600,
+                                    fontSize: '13px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmEscalation}
+                                disabled={isSubmittingEscalation || !selectedTargetAnalystId}
+                                style={{
+                                    padding: '9px 22px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    backgroundColor: '#d97706',
+                                    color: '#ffffff',
+                                    fontWeight: 700,
+                                    fontSize: '13px',
+                                    cursor: isSubmittingEscalation || !selectedTargetAnalystId ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 4px rgba(217, 119, 6, 0.3)'
+                                }}
+                            >
+                                <ArrowUpRight size={16} />
+                                {isSubmittingEscalation ? 'Escalating...' : 'Escalate'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

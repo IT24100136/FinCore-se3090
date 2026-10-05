@@ -11,6 +11,7 @@ import {
   Building,
   KeyRound,
   RotateCcw,
+  FileCheck2,
 } from 'lucide-react';
 
 export default function AppNavbar() {
@@ -115,6 +116,9 @@ export default function AppNavbar() {
               <NavLink to="/analyst/review-queue" style={navLinkStyle}>
                 <Layers size={16} /> Analyst Queue
               </NavLink>
+              <NavLink to="/analyst/history" style={navLinkStyle}>
+                <FileCheck2 size={16} /> Audit Trail &amp; History
+              </NavLink>
               <NavLink to="/admin/reversals" style={navLinkStyle}>
                 <RotateCcw size={16} /> Reversal Action
               </NavLink>
@@ -123,9 +127,14 @@ export default function AppNavbar() {
               </NavLink>
             </>
           ) : (
-            <NavLink to="/analyst/review-queue" style={navLinkStyle}>
-              <Layers size={16} /> Analyst Review Queue
-            </NavLink>
+            <>
+              <NavLink to="/analyst/review-queue" style={navLinkStyle}>
+                <Layers size={16} /> Analyst Review Queue
+              </NavLink>
+              <NavLink to="/analyst/history" style={navLinkStyle}>
+                <FileCheck2 size={16} /> Audit Trail &amp; History
+              </NavLink>
+            </>
           )}
         </nav>
       </div>

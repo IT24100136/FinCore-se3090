@@ -1,144 +1,263 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import {
   Search,
   Filter,
   Download,
   FileCheck2,
-  Calendar,
+  RefreshCw,
+  ShieldAlert,
+  ArrowRight,
+  CheckCircle2,
+  XCircle,
+  AlertOctagon,
+  HelpCircle,
+  RotateCcw,
   Clock,
   User,
-  ShieldCheck,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  RefreshCw,
-  FileSpreadsheet
+  Shield,
+  ExternalLink
 } from 'lucide-react';
+import { auditService } from '../../services/auditService';
 
-export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase }) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [decisionFilter, setDecisionFilter] = useState('ALL'); // 'ALL' | 'APPROVED' | 'REJECTED' | 'ESCALATED'
+// ============================================================================
+// 1. Error Boundary to prevent any whiteout crashes
+// ============================================================================
+class AuditErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
 
-  // Normalize queue items into 8-column compliance records
-  const records = queue.map((item, idx) => {
-    const rawAmount = Number(item.amount) || 0;
-    const isDual = rawAmount >= 75000 || item.status === 'PendingSecondApproval';
-    const statusUpper = (item.status || 'UnderReview').toUpperCase();
-    
-    let resolvedAction = 'PENDING';
-    if (statusUpper.includes('APPROV') || statusUpper.includes('COMPLETED') || statusUpper.includes('CLEARED')) {
-      resolvedAction = 'APPROVED';
-    } else if (statusUpper.includes('REJECT') || statusUpper.includes('BLOCKED') || statusUpper.includes('FRAUD')) {
-      resolvedAction = 'REJECTED';
-    } else if (statusUpper.includes('SECOND') || statusUpper.includes('ESCALAT') || statusUpper.includes('HELD')) {
-      resolvedAction = 'ESCALATED';
-    }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
 
-    const timestamp = item.createdAt || new Date(Date.now() - idx * 3600000).toISOString();
-    const txId = item.queueId || item.transactionId || `TXN-8829${idx}`;
-    const senderAcc = item.senderAccountNumber || (item.senderWalletId ? `ACC-${String(item.senderWalletId).padStart(8, '0')}` : `ACC-0000000${(idx % 4) + 1}`);
-    const recipient = item.recipientName || item.counterparty || (item.receiverWalletId ? `ACC-${String(item.receiverWalletId).padStart(8, '0')}` : 'Verified Beneficiary');
-    const riskScore = item.riskScore ?? (idx === 0 ? 87 : idx === 1 ? 58 : 34);
-    const analystName = item.assignedAnalyst || (idx % 2 === 0 ? 'Diluni Silva' : 'Abhishek Admin');
-    const analystId = item.assignedAnalystId || (idx % 2 === 0 ? 'ANL-1001' : 'ADM-9001');
-    const secondaryApprover = isDual 
-      ? (idx % 2 === 0 ? 'ADM-9001 (Supervisor)' : 'ANL-002 (Senior Approver)')
-      : 'N/A - Single Approval';
-    const complianceNotes = item.analystNotes || item.flagReasons || (resolvedAction === 'APPROVED' ? 'Biometrics matched; IP verified within normal bounds.' : resolvedAction === 'REJECTED' ? 'High spatial anomaly; Device fingerprint not recognized.' : 'Maker-checker dual approval required.');
+  componentDidCatch(error, errorInfo) {
+    console.error('AuditErrorBoundary caught an unhandled render error:', error, errorInfo);
+  }
 
-    return {
-      rawItem: item,
-      timestamp,
-      txId,
-      amount: rawAmount,
-      senderAcc,
-      recipient,
-      riskScore,
-      action: resolvedAction,
-      analystName,
-      analystId,
-      secondaryApprover,
-      complianceNotes
-    };
-  });
-
-  // Filtered records
-  const filteredRecords = records.filter(rec => {
-    // Decision Filter
-    if (decisionFilter !== 'ALL' && rec.action !== decisionFilter) {
-      return false;
-    }
-
-    // Search Filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+  render() {
+    if (this.state.hasError) {
       return (
-        rec.txId.toLowerCase().includes(q) ||
-        rec.analystId.toLowerCase().includes(q) ||
-        rec.analystName.toLowerCase().includes(q) ||
-        rec.senderAcc.toLowerCase().includes(q) ||
-        rec.recipient.toLowerCase().includes(q) ||
-        rec.complianceNotes.toLowerCase().includes(q)
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '12px',
+          border: '1px solid #fecaca',
+          padding: '32px',
+          textAlign: 'center',
+          color: '#991b1b',
+          margin: '20px 0'
+        }}>
+          <ShieldAlert size={40} color="#dc2626" style={{ margin: '0 auto 12px auto' }} />
+          <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px 0' }}>Audit Trail Display Error</h3>
+          <p style={{ fontSize: '13px', color: '#7f1d1d', margin: '0 0 16px 0' }}>
+            An unexpected error occurred while parsing audit records: {this.state.error?.message || 'Unknown error'}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              if (this.props.onRetry) this.props.onRetry();
+            }}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#dc2626',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Retry Audit Trail
+          </button>
+        </div>
       );
     }
+    return this.props.children;
+  }
+}
+
+// ============================================================================
+// 2. Safe Date & String Utilities
+// ============================================================================
+function safeDateStrings(dateVal) {
+  if (!dateVal) return { utc: 'N/A', local: 'N/A' };
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return { utc: String(dateVal), local: String(dateVal) };
+    return {
+      utc: d.toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
+      local: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + d.toLocaleDateString()
+    };
+  } catch (e) {
+    return { utc: String(dateVal), local: String(dateVal) };
+  }
+}
+
+// ============================================================================
+// 3. Main Decision & Audit History Table Component
+// ============================================================================
+function DecisionHistoryTableInner({
+  queue,
+  items,
+  onRefresh,
+  onOpenCase,
+  fetchLive = true
+}) {
+  const [records, setRecords] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState('ALL');
+  const [riskTierFilter, setRiskTierFilter] = useState('ALL');
+
+  // Fetch live audit history from PostgreSQL
+  const loadLiveHistory = async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await auditService.getAuditHistory();
+      setRecords(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load audit history from backend:', err);
+      setLoadError(err.response?.data?.message || err.message || 'Failed to connect to audit history API');
+      // If props items or queue provided, fallback to that
+      if (Array.isArray(items) && items.length > 0) {
+        setRecords(items);
+      } else if (Array.isArray(queue) && queue.length > 0) {
+        setRecords(queue);
+      } else {
+        setRecords([]);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (Array.isArray(items) && items.length > 0) {
+      setRecords(items);
+    } else if (fetchLive) {
+      loadLiveHistory();
+    } else if (Array.isArray(queue) && queue.length > 0) {
+      setRecords(queue);
+    }
+  }, [items, queue, fetchLive]);
+
+  const handleManualRefresh = async () => {
+    if (onRefresh) {
+      onRefresh();
+    }
+    await loadLiveHistory();
+  };
+
+  // Filter and normalize records
+  const filteredRecords = records.filter(r => {
+    if (!r) return false;
+
+    // Action Filter
+    const actionUpper = String(r.action || r.decision || '').toUpperCase();
+    if (actionFilter !== 'ALL') {
+      if (!actionUpper.includes(actionFilter)) {
+        return false;
+      }
+    }
+
+    // Risk Tier Filter
+    const tierUpper = String(r.riskTier || '').toUpperCase();
+    const score = Number(r.riskScore) || 0;
+    if (riskTierFilter === 'CRITICAL' && !tierUpper.includes('CRIT') && score < 70) return false;
+    if (riskTierFilter === 'HIGH' && !tierUpper.includes('HIGH') && (score < 50 || score >= 70)) return false;
+    if (riskTierFilter === 'MEDIUM' && !tierUpper.includes('MED') && (score < 30 || score >= 50)) return false;
+    if (riskTierFilter === 'LOW' && !tierUpper.includes('LOW') && score >= 30) return false;
+
+    // Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const ref = String(r.referenceId || r.reference || r.txId || r.queueCode || '').toLowerCase();
+      const analystName = String(r.primaryAnalystName || r.actor || r.analystName || '').toLowerCase();
+      const analystId = String(r.primaryAnalystId || r.actorId || r.analystId || '').toLowerCase();
+      const sender = String(r.senderName || r.senderAccountNumber || '').toLowerCase();
+      const recipient = String(r.recipientName || r.recipientAccountNo || '').toLowerCase();
+      const notes = String(r.notes || r.reason || r.description || '').toLowerCase();
+      const action = actionUpper.toLowerCase();
+
+      return (
+        ref.includes(q) ||
+        analystName.includes(q) ||
+        analystId.includes(q) ||
+        sender.includes(q) ||
+        recipient.includes(q) ||
+        notes.includes(q) ||
+        action.includes(q)
+      );
+    }
+
     return true;
   });
 
-  // Export to CSV Function
-  const handleExportCSV = () => {
-    const headers = [
-      'Timestamp (UTC)',
-      'Timestamp (Local)',
-      'Transaction ID',
-      'Amount (LKR)',
-      'Sender Account No',
-      'Recipient Name',
-      'AI Risk Score',
-      'Decision Action',
-      'Primary Analyst Name',
-      'Primary Analyst ID',
-      'Secondary Approver',
-      'Compliance Justification Notes'
-    ];
-
-    const csvRows = [headers.join(',')];
-
-    filteredRecords.forEach(r => {
-      const utcTime = new Date(r.timestamp).toISOString();
-      const localTime = new Date(r.timestamp).toLocaleString();
-      const cleanNotes = `"${(r.complianceNotes || '').replace(/"/g, '""')}"`;
-      const cleanRecipient = `"${(r.recipient || '').replace(/"/g, '""')}"`;
-
-      const row = [
-        utcTime,
-        `"${localTime}"`,
-        r.txId,
-        r.amount,
-        r.senderAcc,
-        cleanRecipient,
-        r.riskScore,
-        r.action,
-        `"${r.analystName}"`,
-        r.analystId,
-        `"${r.secondaryApprover}"`,
-        cleanNotes
-      ];
-      csvRows.push(row.join(','));
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvRows.join('\n'));
-    const link = document.createElement('a');
-    link.setAttribute('href', csvContent);
-    link.setAttribute('download', `FinCore_Decision_Audit_Trail_${new Date().toISOString().substring(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Action badge visual styling
+  const getActionBadge = (rawAction) => {
+    const act = String(rawAction || 'PENDING').toUpperCase();
+    if (act.includes('APPROV')) {
+      return {
+        bg: '#dcfce7',
+        text: '#15803d',
+        border: '#86efac',
+        icon: <CheckCircle2 size={13} style={{ marginRight: '4px' }} />,
+        label: 'Approved'
+      };
+    }
+    if (act.includes('REJECT') || act.includes('BLOCK') || act.includes('FRAUD')) {
+      return {
+        bg: '#fee2e2',
+        text: '#b91c1c',
+        border: '#fca5a5',
+        icon: <XCircle size={13} style={{ marginRight: '4px' }} />,
+        label: 'Rejected'
+      };
+    }
+    if (act.includes('ESCALAT')) {
+      return {
+        bg: '#ede9fe',
+        text: '#6d28d9',
+        border: '#c4b5fd',
+        icon: <AlertOctagon size={13} style={{ marginRight: '4px' }} />,
+        label: 'Escalated'
+      };
+    }
+    if (act.includes('INFO') || act.includes('REVISION')) {
+      return {
+        bg: '#fef3c7',
+        text: '#b45309',
+        border: '#fde68a',
+        icon: <HelpCircle size={13} style={{ marginRight: '4px' }} />,
+        label: 'Info Requested'
+      };
+    }
+    if (act.includes('REVERS')) {
+      return {
+        bg: '#ffe4e6',
+        text: '#be123c',
+        border: '#fda4af',
+        icon: <RotateCcw size={13} style={{ marginRight: '4px' }} />,
+        label: 'Reversed'
+      };
+    }
+    return {
+      bg: '#f1f5f9',
+      text: '#475569',
+      border: '#cbd5e1',
+      icon: <Clock size={13} style={{ marginRight: '4px' }} />,
+      label: act
+    };
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* Header & Description */}
+      {/* Header and Context Banner */}
       <div>
         <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.4px' }}>
           COMPLIANCE &gt; AUDIT TRAILS
@@ -147,13 +266,13 @@ export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase
           Full Decision History &amp; Governance Audit Trail
         </h1>
         <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0 0' }}>
-          Enterprise-grade regulatory audit log detailing timestamped analyst decisions, risk scores, Maker-Checker second approvers, and compliance justifications.
+          Enterprise regulatory audit log tracking timestamped analyst decisions, risk telemetry, dual maker-checker sign-offs, and compliance justifications stored permanently in PostgreSQL.
         </p>
       </div>
 
-      {/* Toolbar: Search, Filter, Export Button */}
+      {/* Toolbar: Search, Filters, Refresh, Export */}
       <div style={{
-        backgroundColor: '#fff',
+        backgroundColor: '#ffffff',
         borderRadius: '12px',
         padding: '16px 20px',
         border: '1px solid #e2e8f0',
@@ -165,12 +284,12 @@ export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase
         boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
       }}>
         {/* Left: Search input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '280px' }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '380px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '280px', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: '340px' }}>
             <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '10px' }} />
             <input
               type="text"
-              placeholder="Search Tx ID, Analyst ID (e.g. ANL-1001), or account..."
+              placeholder="Search reference, analyst, account, reason..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -185,12 +304,12 @@ export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase
             />
           </div>
 
-          {/* Decision Dropdown Filter */}
+          {/* Action Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Filter size={14} color="#64748b" />
             <select
-              value={decisionFilter}
-              onChange={(e) => setDecisionFilter(e.target.value)}
+              value={actionFilter}
+              onChange={(e) => setActionFilter(e.target.value)}
               style={{
                 padding: '8px 12px',
                 fontSize: '12px',
@@ -202,52 +321,77 @@ export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase
                 cursor: 'pointer'
               }}
             >
-              <option value="ALL">All Decisions</option>
-              <option value="APPROVED">Approved Only</option>
-              <option value="REJECTED">Rejected Only</option>
-              <option value="ESCALATED">Escalated / Pending 2nd</option>
+              <option value="ALL">All Actions</option>
+              <option value="APPROV">Approved Only</option>
+              <option value="REJECT">Rejected Only</option>
+              <option value="ESCALAT">Escalated Only</option>
+              <option value="INFO">Info Requested Only</option>
+              <option value="REVERS">Reversed Only</option>
             </select>
           </div>
+
+          {/* Risk Tier Filter */}
+          <select
+            value={riskTierFilter}
+            onChange={(e) => setRiskTierFilter(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              fontSize: '12px',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              backgroundColor: '#fff',
+              color: '#334155',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            <option value="ALL">All Risk Tiers</option>
+            <option value="CRITICAL">Critical Risk (&ge; 70)</option>
+            <option value="HIGH">High Risk (50 - 69)</option>
+            <option value="MEDIUM">Medium Risk (30 - 49)</option>
+            <option value="LOW">Low Risk (&lt; 30)</option>
+          </select>
         </div>
 
-        {/* Right: Export CSV & Refresh */}
+        {/* Right: Refresh & CSV Export */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                backgroundColor: '#f8fafc',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#475569',
-                cursor: 'pointer'
-              }}
-            >
-              <RefreshCw size={13} /> Refresh
-            </button>
-          )}
+          <button
+            onClick={handleManualRefresh}
+            disabled={isLoading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              backgroundColor: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#475569',
+              cursor: isLoading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+            {isLoading ? 'Loading...' : 'Refresh'}
+          </button>
 
           <button
-            onClick={handleExportCSV}
+            onClick={() => auditService.exportAuditToCsv(filteredRecords)}
+            disabled={filteredRecords.length === 0}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
               padding: '8px 16px',
-              backgroundColor: '#16a34a',
+              backgroundColor: filteredRecords.length === 0 ? '#94a3b8' : '#16a34a',
               color: '#ffffff',
               border: 'none',
               borderRadius: '8px',
               fontSize: '12px',
               fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(22, 163, 74, 0.3)',
+              cursor: filteredRecords.length === 0 ? 'not-allowed' : 'pointer',
+              boxShadow: filteredRecords.length === 0 ? 'none' : '0 2px 4px rgba(22, 163, 74, 0.3)',
               transition: 'background-color 0.15s ease'
             }}
           >
@@ -257,7 +401,7 @@ export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase
         </div>
       </div>
 
-      {/* Enterprise Compliance Data Table (8 Mandatory Columns) */}
+      {/* Main Table Card */}
       <div style={{
         backgroundColor: '#fff',
         borderRadius: '12px',
@@ -265,150 +409,268 @@ export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase
         overflow: 'hidden',
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', letterSpacing: '0.4px', fontSize: '11px' }}>
-                <th style={{ padding: '14px 16px', fontWeight: 700 }}>1. Timestamp</th>
-                <th style={{ padding: '14px 14px', fontWeight: 700 }}>2. Tx ID &amp; Amount (LKR)</th>
-                <th style={{ padding: '14px 14px', fontWeight: 700 }}>3. Sender Acc &amp; Recipient</th>
-                <th style={{ padding: '14px 14px', fontWeight: 700 }}>4. AI Risk Score</th>
-                <th style={{ padding: '14px 14px', fontWeight: 700 }}>5. Action</th>
-                <th style={{ padding: '14px 14px', fontWeight: 700 }}>6. Primary Analyst</th>
-                <th style={{ padding: '14px 14px', fontWeight: 700 }}>7. Secondary Approver</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700 }}>8. Compliance Justification</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.length === 0 ? (
-                <tr>
-                  <td colSpan="8" style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
-                    No audit records match the selected search and filter criteria.
-                  </td>
+        {isLoading ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid #e2e8f0',
+              borderTopColor: '#2563eb',
+              borderRadius: '50%',
+              margin: '0 auto 16px auto',
+              animation: 'spin 0.8s linear infinite'
+            }} />
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
+              Querying PostgreSQL Audit Log Records...
+            </div>
+            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+              Retrieving cryptographic decision events, maker-checker signatures, and telemetry
+            </div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : filteredRecords.length === 0 ? (
+          <div style={{
+            padding: '64px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#f1f5f9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '16px'
+            }}>
+              <FileCheck2 size={28} color="#64748b" />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b', margin: '0 0 6px 0' }}>
+              No audit history available.
+            </h3>
+            <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '420px', margin: '0 0 20px 0', lineHeight: 1.5 }}>
+              {records.length === 0
+                ? 'No compliance audit records or decision logs found in PostgreSQL database.'
+                : 'No audit records match the current filter or search criteria.'}
+            </p>
+            <button
+              onClick={handleManualRefresh}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 18px',
+                backgroundColor: '#2563eb',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              <RefreshCw size={14} /> Refresh Audit History
+            </button>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+              <thead>
+                <tr style={{
+                  backgroundColor: '#f8fafc',
+                  color: '#475569',
+                  borderBottom: '1px solid #e2e8f0',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.4px',
+                  fontSize: '11px'
+                }}>
+                  <th style={{ padding: '14px 16px', fontWeight: 700 }}>Timestamp</th>
+                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Actor / Analyst</th>
+                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Action</th>
+                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Transaction / Reference</th>
+                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Status Transition</th>
+                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Risk Info</th>
+                  <th style={{ padding: '14px 14px', fontWeight: 700 }}>Dual Approver</th>
+                  <th style={{ padding: '14px 16px', fontWeight: 700 }}>Description / Reason</th>
                 </tr>
-              ) : (
-                filteredRecords.map((r, idx) => {
-                  const actionStyle = r.action === 'APPROVED'
-                    ? { bg: '#dcfce7', text: '#15803d', border: '#86efac' }
-                    : r.action === 'REJECTED'
-                    ? { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' }
-                    : { bg: '#fef3c7', text: '#b45309', border: '#fde68a' };
+              </thead>
+              <tbody>
+                {filteredRecords.map((r, idx) => {
+                  const dateInfo = safeDateStrings(r.timestamp || r.decidedAt);
+                  const badge = getActionBadge(r.action || r.decision);
+                  const score = Number(r.riskScore) || 0;
+                  const scoreColor = score >= 70 ? '#dc2626' : score >= 50 ? '#d97706' : '#16a34a';
 
-                  const scoreColor = r.riskScore >= 70 ? '#dc2626' : r.riskScore >= 50 ? '#d97706' : '#16a34a';
+                  const rawAmount = Number(r.amount) || 0;
+                  const reference = r.referenceId || r.reference || r.queueCode || r.txId || 'N/A';
+                  const prevStatus = r.previousStatus || 'Queued';
+                  const newStatus = r.newStatus || r.status || badge.label;
+                  const actorName = r.primaryAnalystName || r.actor || 'Compliance Analyst';
+                  const actorId = r.primaryAnalystId || r.actorId || 'ANL-001';
+                  const secApprover = r.secondaryApproverName || 'N/A - Single Approval';
+                  const notes = r.notes || r.reason || r.description || 'Compliance verification completed.';
 
                   return (
                     <tr
-                      key={idx}
+                      key={r.id || idx}
                       style={{
                         borderBottom: '1px solid #f1f5f9',
                         transition: 'background-color 0.1s ease',
                         cursor: onOpenCase ? 'pointer' : 'default'
                       }}
-                      onClick={onOpenCase ? () => onOpenCase(r.rawItem) : undefined}
+                      onClick={onOpenCase ? () => onOpenCase(r) : undefined}
                       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f8fafc'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ffffff'; }}
                     >
-                      {/* 1. Timestamp (UTC & Local) */}
+                      {/* 1. Timestamp (UTC + Local) */}
                       <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
                         <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0f172a' }}>
-                          {new Date(r.timestamp).toISOString().replace('T', ' ').substring(0, 19)} UTC
+                          {dateInfo.utc}
                         </div>
                         <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                          Local: {new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          Local: {dateInfo.local}
                         </div>
                       </td>
 
-                      {/* 2. Transaction ID & Amount */}
+                      {/* 2. Actor / Analyst */}
                       <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2563eb' }}>
-                          {r.txId}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <User size={13} color="#64748b" />
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>{actorName}</span>
                         </div>
-                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '13px', marginTop: '2px' }}>
-                          Rs. {r.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </div>
-                      </td>
-
-                      {/* 3. Sender Account No & Recipient */}
-                      <td style={{ padding: '14px 14px' }}>
-                        <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>
-                          {r.senderAcc}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.recipient}>
-                          &rarr; {r.recipient}
+                        <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#64748b', marginTop: '2px', paddingLeft: '19px' }}>
+                          {actorId}
                         </div>
                       </td>
 
-                      {/* 4. AI Risk Score Badge */}
+                      {/* 3. Action */}
                       <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
                         <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontWeight: 800,
-                          fontSize: '11px',
-                          backgroundColor: `${scoreColor}18`,
-                          color: scoreColor,
-                          border: `1px solid ${scoreColor}40`
-                        }}>
-                          {r.riskScore}/100
-                        </span>
-                      </td>
-
-                      {/* 5. Action Badge */}
-                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
                           padding: '3px 8px',
                           borderRadius: '6px',
-                          fontWeight: 800,
+                          fontWeight: 700,
                           fontSize: '11px',
-                          backgroundColor: actionStyle.bg,
-                          color: actionStyle.text,
-                          border: `1px solid ${actionStyle.border}`
+                          backgroundColor: badge.bg,
+                          color: badge.text,
+                          border: `1px solid ${badge.border}`
                         }}>
-                          {r.action}
+                          {badge.icon}
+                          {badge.label}
                         </span>
                       </td>
 
-                      {/* 6. Primary Analyst */}
+                      {/* 4. Reference & Amount */}
                       <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{r.analystName}</div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#64748b' }}>{r.analystId}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2563eb' }}>
+                            {reference}
+                          </span>
+                          {onOpenCase && (
+                            <ExternalLink size={12} color="#2563eb" style={{ opacity: 0.7 }} />
+                          )}
+                        </div>
+                        {rawAmount > 0 && (
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '12px', marginTop: '2px' }}>
+                            Rs. {rawAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </div>
+                        )}
+                        {(r.senderName || r.recipientName) && (
+                          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                            {r.senderName || 'Sender'} &rarr; {r.recipientName || 'Recipient'}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* 5. Status Transition: Prev -> New */}
+                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
+                          <span style={{
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#f1f5f9',
+                            color: '#475569',
+                            fontWeight: 600
+                          }}>
+                            {prevStatus}
+                          </span>
+                          <ArrowRight size={12} color="#94a3b8" />
+                          <span style={{
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: badge.bg,
+                            color: badge.text,
+                            fontWeight: 700
+                          }}>
+                            {newStatus}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 6. Risk Information */}
+                      <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontWeight: 800,
+                            fontSize: '11px',
+                            backgroundColor: `${scoreColor}18`,
+                            color: scoreColor,
+                            border: `1px solid ${scoreColor}40`
+                          }}>
+                            {score}/100
+                          </span>
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            color: scoreColor
+                          }}>
+                            {r.riskTier || (score >= 70 ? 'CRITICAL' : score >= 50 ? 'HIGH' : 'MEDIUM')}
+                          </span>
+                        </div>
                       </td>
 
                       {/* 7. Secondary Approver */}
                       <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
                         <span style={{
                           fontSize: '11px',
-                          color: r.secondaryApprover.includes('N/A') ? '#94a3b8' : '#7c3aed',
-                          fontWeight: r.secondaryApprover.includes('N/A') ? 500 : 700
+                          color: secApprover.includes('N/A') ? '#94a3b8' : '#7c3aed',
+                          fontWeight: secApprover.includes('N/A') ? 500 : 700
                         }}>
-                          {r.secondaryApprover}
+                          {secApprover}
                         </span>
                       </td>
 
-                      {/* 8. Analyst Notes / Compliance Justification */}
-                      <td style={{ padding: '14px 16px', maxWidth: '240px' }}>
+                      {/* 8. Description / Compliance Justification */}
+                      <td style={{ padding: '14px 16px', maxWidth: '280px' }}>
                         <div style={{
                           fontSize: '11px',
-                          color: '#475569',
+                          color: '#334155',
                           lineHeight: 1.4,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           display: '-webkit-box',
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: 'vertical'
-                        }} title={r.complianceNotes}>
-                          {r.complianceNotes}
+                        }} title={notes}>
+                          {notes}
                         </div>
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-        {/* Table Footer */}
+        {/* Table Footer Summary */}
         <div style={{
           padding: '12px 20px',
           backgroundColor: '#f8fafc',
@@ -419,11 +681,24 @@ export default function DecisionHistoryTable({ queue = [], onRefresh, onOpenCase
           fontSize: '12px',
           color: '#64748b'
         }}>
-          <span>Showing {filteredRecords.length} of {records.length} compliance audit events</span>
-          <span style={{ fontSize: '11px' }}>All decisions signed cryptographically and persisted in PostgreSQL AuditLogs</span>
+          <span>
+            Showing <strong>{filteredRecords.length}</strong> of <strong>{records.length}</strong> compliance audit events
+          </span>
+          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+            All records cryptographically traced in PostgreSQL <code>ApprovalDecisions</code> &amp; <code>AuditLogs</code>
+          </span>
         </div>
       </div>
 
     </div>
+  );
+}
+
+// Wrapped in Error Boundary for resilience
+export default function DecisionHistoryTable(props) {
+  return (
+    <AuditErrorBoundary onRetry={props.onRefresh}>
+      <DecisionHistoryTableInner {...props} />
+    </AuditErrorBoundary>
   );
 }

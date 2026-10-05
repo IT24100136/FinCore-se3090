@@ -467,10 +467,24 @@ export const fraudService = {
   /**
    * Submit decision for a flagged transaction
    */
-  submitDecision: async (transactionId, decision, notes) => {
+  submitDecision: async (transactionId, decision, notes, analystId = null) => {
+    let activeAnalystId = analystId;
+    if (!activeAnalystId) {
+      try {
+        const stored = localStorage.getItem('fincore_user');
+        if (stored) {
+          const u = JSON.parse(stored);
+          if (u?.id) activeAnalystId = u.id;
+        }
+      } catch (e) {}
+    }
+    if (!activeAnalystId) {
+      activeAnalystId = "22222222-2222-2222-2222-222222222222"; // Diluni Silva (ANL-001)
+    }
+
     try {
       await axios.post(`${REVIEWS_API_URL}/${transactionId}/decide`, {
-        analystId: "11111111-1111-1111-1111-111111111111",
+        analystId: activeAnalystId,
         decision,
         notes
       });
