@@ -21,12 +21,16 @@ if (!string.IsNullOrEmpty(port))
     builder.WebHost.UseUrls($"http://+:{port}");
 }
 
-// 1. Configure the CORS policy to allow your Vite frontend (and Flutter Web)
+// 1. Configure the CORS policy to allow your Vite frontend and Vercel Deployment
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.SetIsOriginAllowed(origin => true)
+        policy.WithOrigins(
+                "http://localhost:5173", // Local dev Vite
+                "http://localhost:5174", // Local dev alternative
+                "https://fin-core-se3090.vercel.app" // Live Vercel domain
+            )
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -172,7 +176,7 @@ if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
 }
 
-// Apply the CORS policy (Must be placed before MapControllers)
+// Apply the CORS policy (Must be placed before MapControllers and Auth)
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
