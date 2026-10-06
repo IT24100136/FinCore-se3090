@@ -431,4 +431,5 @@ FodyWeavers.xsd
 *.db
 *.db-shm
 *.db-wal
-fincore.db.venv/ 
+fincore.db
+agentic-ai/.venv/
