@@ -3,25 +3,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../models/held_transaction_model.dart';
+import '../config/api_config.dart';
 import 'auth_service.dart';
 
 class HeldTransactionService {
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
 
-  /// Primary base URLs covering web (localhost) and android emulator (10.0.2.2)
-  static List<String> get candidateBaseUrls {
-    if (kIsWeb) {
-      return const [
-        'http://localhost:5007/api',
-        'http://localhost:5000/api',
+  /// Primary base URLs prioritized by live Render backend and local dev fallbacks
+  static List<String> get candidateBaseUrls => [
+        ApiConfig.baseUrl,
+        if (kIsWeb) 'http://localhost:5007/api',
+        'http://10.0.2.2:5007/api',
       ];
-    }
-    return const [
-      'http://10.0.2.2:5007/api',
-      'http://10.0.2.2:5000/api',
-      'http://localhost:5007/api',
-    ];
-  }
 
   /// Returns realistic fallback demo items required by Component C specification
   static List<HeldTransaction> get fallbackHeldTransactions => [

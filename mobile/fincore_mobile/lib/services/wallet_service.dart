@@ -2,12 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
+import '../config/api_config.dart';
 
 class WalletService {
-  static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:5007/api';
-    return 'http://10.0.2.2:5007/api';
-  }
+  static String get baseUrl => ApiConfig.baseUrl;
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 

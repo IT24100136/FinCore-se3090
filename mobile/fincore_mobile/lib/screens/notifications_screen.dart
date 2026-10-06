@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../models/notification_item.dart';
 import '../widgets/notification_card.dart';
+import '../config/api_config.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final http.Client? httpClient;
@@ -22,10 +23,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<NotificationItem> _notifications = [];
   bool _isLoading = true;
 
-  static String get _apiBaseUrl {
-    if (kIsWeb) return 'http://localhost:5007/api';
-    return 'http://10.0.2.2:5007/api';
-  }
+  static String get _apiBaseUrl => ApiConfig.baseUrl;
 
   @override
   void initState() {

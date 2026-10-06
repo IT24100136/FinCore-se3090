@@ -2,22 +2,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 
 class AuthService {
-  // Use 10.0.2.2 for Android Emulator, localhost for iOS/Web/Desktop
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5007/api/auth';
-    }
-    return 'http://10.0.2.2:5007/api/auth';
-  }
-
-  static String get devicesBaseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:5007/api/devices';
-    }
-    return 'http://10.0.2.2:5007/api/devices';
-  }
+  static String get baseUrl => ApiConfig.authUrl;
+  static String get devicesBaseUrl => ApiConfig.devicesUrl;
 
   static const _storage = FlutterSecureStorage();
 
