@@ -29,7 +29,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "http://localhost:5173", // Local dev Vite
                 "http://localhost:5174", // Local dev alternative
-                "https://fin-core-se3090.vercel.app" // Live Vercel domain
+                "https://fin-core-se3090.vercel.app"  // Live Vercel domain
             )
               .AllowAnyHeader()
               .AllowAnyMethod()
@@ -176,9 +176,13 @@ if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
 }
 
-// Apply the CORS policy (Must be placed before MapControllers and Auth)
+// 1. ADD THIS LINE: Explicitly build the routing tree first
+app.UseRouting();
+
+// 2. Apply the CORS policy immediately after routing, before Auth
 app.UseCors("AllowFrontend");
 
+// 3. Apply Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
