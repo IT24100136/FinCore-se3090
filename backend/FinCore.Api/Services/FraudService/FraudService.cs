@@ -25,19 +25,22 @@ namespace FinCore.Api.Services.FraudService
         private readonly IAnomalyDetectionAgent _anomalyDetectionAgent;
         private readonly ILogger<FraudService> _logger;
         private readonly HttpClient _httpClient;
+        private readonly string _agentBaseUrl;
 
         public FraudService(
             ApplicationDbContext context,
             IGeolocationService geolocationService,
             IAnomalyDetectionAgent anomalyDetectionAgent,
             ILogger<FraudService> logger,
-            HttpClient httpClient)
+            HttpClient httpClient,
+            IConfiguration? configuration = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _geolocationService = geolocationService ?? throw new ArgumentNullException(nameof(geolocationService));
             _anomalyDetectionAgent = anomalyDetectionAgent ?? throw new ArgumentNullException(nameof(anomalyDetectionAgent));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _agentBaseUrl = (configuration?["AiAgent:BaseUrl"] ?? configuration?["AI_AGENT_URL"] ?? "http://localhost:8000").TrimEnd('/');
         }
 
         /// <inheritdoc />
@@ -181,7 +184,7 @@ namespace FinCore.Api.Services.FraudService
                 };
 
                 var httpResponse = await _httpClient.PostAsJsonAsync(
-                    "http://localhost:8000/api/agents/evaluate",
+                    $"{_agentBaseUrl}/api/agents/evaluate",
                     multiAgentPayload,
                     cancellationToken);
 
@@ -314,7 +317,7 @@ namespace FinCore.Api.Services.FraudService
                             }
                         };
 
-                        var shapUrl = "http://localhost:8000/api/fraud/explain";
+                        var shapUrl = $"{_agentBaseUrl}/api/fraud/explain";
                         var shapResponse = await _httpClient.PostAsJsonAsync(shapUrl, shapPayload, cancellationToken);
                         if (shapResponse.IsSuccessStatusCode)
                         {

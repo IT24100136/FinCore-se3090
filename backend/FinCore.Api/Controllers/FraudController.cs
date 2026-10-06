@@ -24,12 +24,14 @@ namespace FinCore.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IFraudService _fraudService;
         private readonly HttpClient _httpClient;
+        private readonly string _agentBaseUrl;
 
-        public FraudController(ApplicationDbContext context, IFraudService fraudService, HttpClient httpClient)
+        public FraudController(ApplicationDbContext context, IFraudService fraudService, HttpClient httpClient, IConfiguration? configuration = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _fraudService = fraudService ?? throw new ArgumentNullException(nameof(fraudService));
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _agentBaseUrl = (configuration?["AiAgent:BaseUrl"] ?? configuration?["AI_AGENT_URL"] ?? "http://localhost:8000").TrimEnd('/');
         }
 
         // GET: api/fraud/agent-health
@@ -45,7 +47,7 @@ namespace FinCore.Api.Controllers
 
             try
             {
-                var healthRes = await _httpClient.GetAsync("http://localhost:8000/health");
+                var healthRes = await _httpClient.GetAsync($"{_agentBaseUrl}/health");
                 sw.Stop();
 
                 if (!healthRes.IsSuccessStatusCode)
@@ -73,7 +75,7 @@ namespace FinCore.Api.Controllers
             {
                 status,
                 service = "FinCore Python LangGraph Multi-Agent Intelligence Service",
-                endpoint = "http://localhost:8000",
+                endpoint = _agentBaseUrl,
                 latencyMs = sw.ElapsedMilliseconds,
                 routingChecks,
                 verified = status == "ONLINE",
