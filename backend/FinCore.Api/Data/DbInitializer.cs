@@ -22,6 +22,28 @@ namespace FinCore.Api.Data
                 await context.Database.ExecuteSqlRawAsync(@"
                     ALTER TABLE ""ReviewQueues"" ADD COLUMN IF NOT EXISTS ""EscalatedByAnalystId"" uuid;
                     ALTER TABLE ""ReviewQueues"" ADD COLUMN IF NOT EXISTS ""EscalationReason"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Status"" text NOT NULL DEFAULT 'Active';
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""EmployeeId"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Department"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Tier"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""JobTitle"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""PhoneNumber"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""PinHash"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""BiometricEnabled"" boolean NOT NULL DEFAULT false;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""DateOfBirth"" timestamp without time zone;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Address"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""City"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""PostalCode"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""IdType"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""IdNumber"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""IdDocumentUrl"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""SelfieUrl"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""KycStatus"" text NOT NULL DEFAULT 'Verified';
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""BankAccountNumber"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""BankRoutingCode"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""CardLastFour"" text;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""AgreedToTerms"" boolean NOT NULL DEFAULT true;
+                    ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""MarketingOptIn"" boolean NOT NULL DEFAULT false;
                     CREATE TABLE IF NOT EXISTS ""RuleAuditLogs"" (
                         ""Id"" uuid NOT NULL PRIMARY KEY,
                         ""RuleId"" character varying(100) NOT NULL,
