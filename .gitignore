@@ -427,3 +427,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+# SQLite local database files
+*.db
+*.db-shm
+*.db-wal
+fincore.db
+agentic-ai/.venv/

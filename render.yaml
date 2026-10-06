@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: fincore-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        value: postgresql://neondb_owner:npg_woi9d0MJHqyb@ep-sparkling-butterfly-b5vjc986-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: Jwt__Key
+        generateValue: true
+      - key: Jwt__Issuer
+        value: FinCore
+      - key: EnableSwagger
+        value: "true"
