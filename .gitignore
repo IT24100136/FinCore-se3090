@@ -431,4 +431,4 @@ FodyWeavers.xsd
 *.db
 *.db-shm
 *.db-wal
-fincore.db
+fincore.db.venv/ 
