@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../widgets/kyc_scanners.dart';
 import 'wallet_home_screen.dart';
+import 'otp_verification_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -243,14 +244,29 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   backgroundColor: _accentBlue,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(ctx);
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
-                  );
+                  final email = _emailController.text.trim();
+                  await AuthService.sendOtp(email);
+                  if (mounted) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => OtpVerificationScreen(
+                          email: email,
+                          onVerified: () {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                              (route) => false,
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  }
                 },
-                child: const Text('Go to Wallet Dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text('Verify Email & Open Wallet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
           ],

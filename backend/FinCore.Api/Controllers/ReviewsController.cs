@@ -21,11 +21,15 @@ namespace FinCore.Api.Controllers
     public class ReviewsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly Services.NotificationService.IEmailService _emailService;
         private const decimal DualApprovalThreshold = 75000m; // Rs. 75,000 dual approval statutory threshold
 
-        public ReviewsController(ApplicationDbContext context)
+        public ReviewsController(
+            ApplicationDbContext context,
+            Services.NotificationService.IEmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         /// <summary>
@@ -388,18 +392,45 @@ namespace FinCore.Api.Controllers
 
                     if (sw != null)
                     {
+                        var rejectionMessage = $"FinCore: Your transaction of LKR {tx.Amount:N2} was rejected and funds have been returned to your wallet.";
                         _context.Notifications.Add(new Notification
                         {
                             UserId = sw.UserId,
                             Recipient = item.SenderName,
                             RecipientName = item.SenderName,
                             Title = "Transfer Rejected",
-                            Message = $"Your transfer of Rs. {tx.Amount:N2} was rejected by fraud compliance and the funds have been returned to your wallet.",
+                            Message = rejectionMessage,
                             DeliveryStatus = "Sent",
                             ChannelDetails = "Analyst Review Console",
                             Category = "accountWarning",
                             IsRead = false,
                             Timestamp = DateTime.UtcNow
+                        });
+
+                        // Dispatch live rejection alert via Brevo email
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var senderUser = sw.UserGuid.HasValue
+                                    ? await _context.Users.FirstOrDefaultAsync(u => u.Id == sw.UserGuid.Value)
+                                    : await _context.Users.FirstOrDefaultAsync(u => u.Name == item.SenderName);
+
+                                if (senderUser != null && !string.IsNullOrWhiteSpace(senderUser.Email))
+                                {
+                                    await _emailService.SendEmailAsync(
+                                        senderUser.Email,
+                                        senderUser.Name,
+                                        "FinCore: Transaction Rejected & Refunded",
+                                        $"<p>{rejectionMessage}</p>",
+                                        rejectionMessage
+                                    );
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Brevo Notification Warning] Rejection alert error: {ex.Message}");
+                            }
                         });
                     }
                 }
@@ -537,8 +568,34 @@ namespace FinCore.Api.Controllers
         }
 
         /// <summary>
+        /// 4b. GET /api/reviews/analysts
+        /// Retrieves database-backed list of eligible analyst and admin staff users for case escalation.
+        /// </summary>
+        [HttpGet("analysts")]
+        public async Task<IActionResult> GetEligibleAnalysts()
+        {
+            var analysts = await _context.Users
+                .AsNoTracking()
+                .Where(u => (u.Role == "Admin" || u.Role == "Analyst" || u.Role == "Senior Analyst" || u.Role == "SeniorAnalyst" || u.Role == "Manager" || u.Role.Contains("Analyst") || u.Role.Contains("Admin")) && (string.IsNullOrEmpty(u.Status) || u.Status == "Active"))
+                .Select(u => new
+                {
+                    u.Id,
+                    u.Name,
+                    u.Email,
+                    u.Role,
+                    u.EmployeeId,
+                    u.Department,
+                    u.Tier,
+                    u.JobTitle
+                })
+                .ToListAsync();
+
+            return Ok(analysts);
+        }
+
+        /// <summary>
         /// 5. POST /api/reviews/{transactionId}/escalate
-        /// Escalates case to a designated recipient analyst/admin, assigns case, updates status to 'Escalated',
+        /// Escalates case to a designated recipient analyst/admin from DB, assigns case, updates status to 'Escalated',
         /// sets Priority to 3 ('CRITICAL'), records an ApprovalDecision & AuditLog, and dispatches a notification.
         /// </summary>
         [HttpPost("{transactionId}/escalate")]
@@ -547,6 +604,29 @@ namespace FinCore.Api.Controllers
             if (request == null)
             {
                 return BadRequest(new { message = "Invalid escalation request payload." });
+            }
+
+            // Security Validation 1: Verify current user permission to escalate
+            User? originAnalyst = null;
+            if (request.AnalystId != Guid.Empty)
+            {
+                originAnalyst = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.AnalystId);
+            }
+
+            if (originAnalyst != null && !IsEligibleStaffRole(originAnalyst.Role))
+            {
+                return StatusCode(403, new { message = "Security policy violation: Current user does not have permission to escalate compliance cases." });
+            }
+
+            // Security Validation 2: Verify selected target analyst exists in DB and has eligible role
+            User? targetAnalyst = null;
+            if (request.TargetAnalystId != Guid.Empty)
+            {
+                targetAnalyst = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.TargetAnalystId);
+                if (targetAnalyst == null || !IsEligibleStaffRole(targetAnalyst.Role))
+                {
+                    return BadRequest(new { message = "Security policy violation: Selected analyst does not exist or does not possess an eligible analyst/admin role." });
+                }
             }
 
             ReviewQueue? item = null;
@@ -575,32 +655,26 @@ namespace FinCore.Api.Controllers
                 return NotFound(new { message = $"Transaction review item '{transactionId}' not found." });
             }
 
-            // Resolve target recipient analyst from database
-            User? targetAnalyst = null;
-            if (request.TargetAnalystId != Guid.Empty)
-            {
-                targetAnalyst = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.TargetAnalystId);
-            }
+            // Fallback selection if target analyst ID was empty
             if (targetAnalyst == null && !string.IsNullOrWhiteSpace(request.TargetAnalystName))
             {
-                targetAnalyst = await _context.Users.FirstOrDefaultAsync(u => u.Name.ToLower() == request.TargetAnalystName.ToLower());
+                targetAnalyst = await _context.Users.FirstOrDefaultAsync(u => u.Name.ToLower() == request.TargetAnalystName.ToLower() && (u.Role == "Admin" || u.Role == "Analyst" || u.Role == "Senior Analyst" || u.Role == "SeniorAnalyst"));
             }
             if (targetAnalyst == null)
             {
                 targetAnalyst = await _context.Users
-                    .FirstOrDefaultAsync(u => (u.Role == "Admin" || u.Role == "Analyst") && u.Id != request.AnalystId)
-                    ?? await _context.Users.FirstOrDefaultAsync(u => u.Role == "Admin" || u.Role == "Analyst");
+                    .FirstOrDefaultAsync(u => (u.Role == "Admin" || u.Role == "Analyst" || u.Role == "Senior Analyst" || u.Role == "SeniorAnalyst") && u.Id != request.AnalystId)
+                    ?? await _context.Users.FirstOrDefaultAsync(u => u.Role == "Admin" || u.Role == "Analyst" || u.Role == "Senior Analyst");
             }
 
-            // Resolve originating analyst from database
-            User? originAnalyst = null;
-            if (request.AnalystId != Guid.Empty)
+            if (targetAnalyst == null)
             {
-                originAnalyst = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.AnalystId);
+                return BadRequest(new { message = "No eligible analyst found in identity database to receive escalation." });
             }
 
+            string previousStatus = string.IsNullOrWhiteSpace(item.Status) ? "Queued" : item.Status;
             string originName = originAnalyst?.Name ?? "Analyst";
-            string targetName = targetAnalyst?.Name ?? request.TargetAnalystName ?? "Senior Analyst";
+            string targetName = targetAnalyst.Name;
             string escalationReason = string.IsNullOrWhiteSpace(request.Reason)
                 ? "Escalated for senior analyst investigation."
                 : request.Reason.Trim();
@@ -609,7 +683,7 @@ namespace FinCore.Api.Controllers
             item.Status = "Escalated";
             item.Priority = 3;
             item.PriorityLabel = "CRITICAL";
-            item.AssignedAnalystId = targetAnalyst?.Id ?? (request.TargetAnalystId != Guid.Empty ? request.TargetAnalystId : null);
+            item.AssignedAnalystId = targetAnalyst.Id;
             item.EscalatedByAnalystId = originAnalyst?.Id ?? (request.AnalystId != Guid.Empty ? request.AnalystId : null);
             item.EscalationReason = escalationReason;
             item.UpdatedAt = DateTime.UtcNow;
@@ -619,7 +693,7 @@ namespace FinCore.Api.Controllers
             {
                 Id = Guid.NewGuid(),
                 TransactionId = item.TransactionId,
-                AnalystId = request.AnalystId != Guid.Empty ? request.AnalystId : (originAnalyst?.Id ?? Guid.NewGuid()),
+                AnalystId = originAnalyst?.Id ?? (request.AnalystId != Guid.Empty ? request.AnalystId : Guid.NewGuid()),
                 Decision = "Escalated",
                 ApprovalLevel = 1,
                 Notes = $"Escalated to {targetName}. Reason: {escalationReason}",
@@ -637,30 +711,27 @@ namespace FinCore.Api.Controllers
                 Action = "ESCALATED",
                 IpAddress = !string.IsNullOrWhiteSpace(item.OriginIp) ? item.OriginIp : "127.0.0.1",
                 Timestamp = DateTime.UtcNow,
-                Details = $"Case {item.QueueCode} (Tx: {item.TransactionId}) escalated to {targetName} by {originName}. Reason: {escalationReason}"
+                Details = $"Actor: {originName} | Action: ESCALATED | Case ID: {item.QueueCode} | Previous Status: {previousStatus} | New Status: Escalated | Assigned Analyst: {targetName} | Reason: {escalationReason}"
             };
             _context.AuditLogs.Add(auditLog);
 
-            // 3. Create persistent notification for the selected recipient analyst
-            if (targetAnalyst != null)
+            // 3. Create persistent notification in PostgreSQL for the selected recipient analyst
+            int targetIntId = DbInitializer.GetDeterministicUserId(targetAnalyst.Id);
+            var notification = new Notification
             {
-                int targetIntId = DbInitializer.GetDeterministicUserId(targetAnalyst.Id);
-                var notification = new Notification
-                {
-                    UserId = targetIntId,
-                    Recipient = targetAnalyst.Email,
-                    RecipientName = targetAnalyst.Name,
-                    Title = $"Case Escalated: {item.QueueCode}",
-                    Message = $"Case {item.QueueCode} (Rs. {item.Amount:N2}) has been escalated to you by {originName}. Reason: {escalationReason}",
-                    Type = "InApp",
-                    Category = "securityPause",
-                    DeliveryStatus = "Sent",
-                    ChannelDetails = "Internal Escalation Routing",
-                    IsRead = false,
-                    Timestamp = DateTime.UtcNow
-                };
-                _context.Notifications.Add(notification);
-            }
+                UserId = targetIntId,
+                Recipient = targetAnalyst.Email,
+                RecipientName = targetAnalyst.Name,
+                Title = $"Case Escalated: {item.QueueCode}",
+                Message = $"Case {item.QueueCode} (Rs. {item.Amount:N2}) has been escalated to you by {originName}. Reason: {escalationReason}",
+                Type = "InApp",
+                Category = "securityPause",
+                DeliveryStatus = "Sent",
+                ChannelDetails = "Internal Escalation Routing",
+                IsRead = false,
+                Timestamp = DateTime.UtcNow
+            };
+            _context.Notifications.Add(notification);
 
             await _context.SaveChangesAsync();
 
@@ -674,6 +745,20 @@ namespace FinCore.Api.Controllers
                 escalationReason = item.EscalationReason,
                 item
             });
+        }
+
+        private static bool IsEligibleStaffRole(string? role)
+        {
+            if (string.IsNullOrWhiteSpace(role)) return false;
+            var r = role.Trim();
+            return r.Equals("Analyst", StringComparison.OrdinalIgnoreCase) ||
+                   r.Equals("Senior Analyst", StringComparison.OrdinalIgnoreCase) ||
+                   r.Equals("SeniorAnalyst", StringComparison.OrdinalIgnoreCase) ||
+                   r.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                   r.Equals("Administrator", StringComparison.OrdinalIgnoreCase) ||
+                   r.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
+                   r.Contains("Analyst", StringComparison.OrdinalIgnoreCase) ||
+                   r.Contains("Admin", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

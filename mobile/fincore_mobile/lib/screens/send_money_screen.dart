@@ -116,6 +116,7 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
           recipient: recipient,
           senderAccountNumber: senderAcc,
           riskScore: riskScore,
+          maskedEmail: result['maskedEmail']?.toString() ?? result['stepUpMaskedEmail']?.toString(),
         );
 
         if (!mounted) return;

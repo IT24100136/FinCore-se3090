@@ -165,7 +165,7 @@ export default function FraudDashboardPage({ initialTab = 'flags' }) {
               onBack={handleBackToFlags}
               onDecisionSubmitted={handleDecisionSubmitted}
               onNavigateToCase={(caseId) => {
-                window.location.href = `/analyst/review-queue?tab=case-detail&caseId=${encodeURIComponent(caseId)}`;
+                navigate(`/analyst/cases/${encodeURIComponent(caseId)}`);
               }}
             />
           )}

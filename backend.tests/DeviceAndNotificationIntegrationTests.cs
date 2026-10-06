@@ -31,11 +31,12 @@ namespace FinCore.Api.Tests
             builder.UseSetting("DbProvider", "Sqlite");
             builder.ConfigureServices(services =>
             {
-                // Remove all DbContext options and ApplicationDbContext descriptors
+                // Remove all DbContext options, ApplicationDbContext descriptors, and EF infrastructure
                 var descriptors = services.Where(
                     d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>) ||
                          d.ServiceType == typeof(DbContextOptions) ||
-                         d.ServiceType == typeof(ApplicationDbContext)).ToList();
+                         d.ServiceType == typeof(ApplicationDbContext) ||
+                         (d.ServiceType.Namespace != null && d.ServiceType.Namespace.StartsWith("Microsoft.EntityFrameworkCore"))).ToList();
 
                 foreach (var d in descriptors)
                 {
@@ -280,7 +281,7 @@ namespace FinCore.Api.Tests
                 .FirstOrDefaultAsync(a => a.UserId == 250 && a.Action == "NOTIFICATION_SENT");
 
             Assert.NotNull(auditLog);
-            Assert.Contains("Sent Email notification to alex.rivera@fincore-test.io", auditLog.Details);
+            Assert.Contains("Sent Email notification to customer alex.rivera@fincore-test.io", auditLog.Details);
         }
     }
 }

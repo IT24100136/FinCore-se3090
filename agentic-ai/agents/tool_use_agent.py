@@ -64,16 +64,13 @@ def format_customer_message(
     formatted_amount = f"{amount:,.0f}" if amount > 0 else "0"
 
     if norm_decision in ("APPROVED", "AUTO_APPROVE", "SETTLED"):
-        return f"Security Alert: Your transfer of {currency} {formatted_amount} has been approved and settled successfully."
+        return f"FinCore: Your transfer of {currency} {formatted_amount} to recipient was successful."
     elif norm_decision in ("HELD", "HELD_FOR_REVIEW", "HELD_FOR_STEP_UP", "STEP_UP_CHALLENGE", "ESCALATE_TO_ANALYST"):
-        return f"Security Alert: Your transfer of {currency} {formatted_amount} has been held for review."
+        return f"FinCore: Your transaction of {currency} {formatted_amount} is under review and temporarily held."
     elif norm_decision in ("REJECTED", "REVERSED", "DECLINED"):
-        msg = f"Security Alert: Your transfer of {currency} {formatted_amount} has been rejected following security inspection."
-        if reason:
-            msg += f" Reason: {reason}"
-        return msg
+        return f"FinCore: Your transaction of {currency} {formatted_amount} was rejected and funds have been returned to your wallet."
     else:
-        return f"Security Alert: Your transfer of {currency} {formatted_amount} status is: {decision}."
+        return f"FinCore: Your transaction of {currency} {formatted_amount} status is: {decision}."
 
 
 def infer_notification_type(recipient: str) -> str:

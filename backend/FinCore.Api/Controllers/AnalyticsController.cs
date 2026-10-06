@@ -87,9 +87,11 @@ namespace FinCore.Api.Controllers
 
             var response = new
             {
+                newDevices = newDevicesThisWeek,
                 newDevicesThisWeek = newDevicesThisWeek,
                 newDevicesCount = newDevicesThisWeek,
                 deliverySuccessRate = deliverySuccessRate,
+                flaggedUsers = flaggedUsersCount,
                 flaggedUsersCount = flaggedUsersCount,
                 sentNotificationsCount = sentNotificationsCount,
                 failedNotificationsCount = failedNotificationsCount,

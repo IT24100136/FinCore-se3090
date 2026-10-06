@@ -239,55 +239,121 @@ class AuthService {
   }
 
   // ── OTP Verification Flow ──────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> sendOtp({
-    required String identifier,
-    String purpose = 'LOGIN',
-  }) async {
+  static Future<Map<String, dynamic>> sendOtp(
+    String email, [
+    String? password,
+  ]) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/otp/send'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'identifier': identifier.trim(),
-          'purpose': purpose,
+          'identifier': email.trim().toLowerCase(),
+          'purpose': 'LOGIN',
         }),
       );
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (response.statusCode == 200) {
-        return {'success': true, 'data': data};
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Verification code sent to $email.',
+          'data': data,
+        };
       } else {
-        return {'success': false, 'message': data['message'] ?? 'Failed to send OTP'};
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to send verification code.',
+        };
       }
     } catch (e) {
-      return {'success': false, 'message': 'Network error sending OTP: $e'};
+      return {
+        'success': false,
+        'message': 'Network error sending OTP: $e',
+      };
     }
   }
 
-  static Future<Map<String, dynamic>> verifyOtp({
-    required String identifier,
-    required String code,
-    String purpose = 'LOGIN',
-  }) async {
+  static Future<Map<String, dynamic>> verifyOtp(
+    String email,
+    String otpCode,
+  ) async {
     try {
+      final cleanEmail = email.trim().toLowerCase();
+      final cleanCode = otpCode.trim();
+
       final response = await http.post(
-        Uri.parse('$baseUrl/otp/verify'),
+        Uri.parse('$baseUrl/verify-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'identifier': identifier.trim(),
-          'code': code.trim(),
-          'purpose': purpose,
+          'identifier': cleanEmail,
+          'code': cleanCode,
+          'purpose': 'LOGIN',
         }),
       );
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      if (response.statusCode == 200 && data['success'] == true) {
-        return {'success': true, 'message': data['message']};
+      if (response.statusCode == 200 && data['token'] != null) {
+        final token = data['token'] as String;
+
+        // Store JWT securely using flutter_secure_storage
+        await saveToken(token);
+
+        // Extract profile and claims
+        final userObj = data['user'] as Map<String, dynamic>?;
+        final claims = parseJwt(token);
+
+        final id = userObj?['id']?.toString() ??
+            claims?['UserId']?.toString() ??
+            claims?['sub']?.toString() ??
+            '';
+        final name = userObj?['fullName']?.toString() ??
+            claims?['name']?.toString() ??
+            claims?['unique_name']?.toString() ??
+            cleanEmail.split('@')[0];
+        final role = userObj?['role']?.toString() ??
+            claims?['role']?.toString() ??
+            'Customer';
+        final rawWalletId = userObj?['walletId'];
+        final walletId = rawWalletId is int
+            ? rawWalletId
+            : int.tryParse(rawWalletId?.toString() ?? '');
+
+        await saveUserProfile(
+          id: id,
+          name: name,
+          email: cleanEmail,
+          phone: userObj?['phoneNumber']?.toString(),
+          role: role,
+          walletId: walletId,
+        );
+
+        // Optional device verification check
+        final rawUserId = claims?['UserId'] ?? claims?['sub'] ?? claims?['nameid'] ?? 1;
+        final userId = int.tryParse(rawUserId.toString()) ?? 1;
+        final fingerprint = await getOrGenerateDeviceFingerprint();
+
+        try {
+          await verifyDevice(userId: userId, deviceFingerprint: fingerprint);
+        } catch (_) {}
+
+        return {
+          'success': true,
+          'token': token,
+          'user': userObj,
+          'message': data['message'] ?? 'Verification successful.',
+        };
       } else {
-        return {'success': false, 'message': data['message'] ?? 'Invalid verification code'};
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Invalid or expired verification code.',
+        };
       }
     } catch (e) {
-      return {'success': false, 'message': 'Network error verifying OTP: $e'};
+      return {
+        'success': false,
+        'message': 'Network error verifying OTP: $e',
+      };
     }
   }
 
