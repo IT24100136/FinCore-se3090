@@ -373,11 +373,10 @@ function CaseDetailPageInner() {
 
         {/* Action Feedback Banner */}
         {actionFeedback && (
-          <div className={`p-4 rounded-lg text-xs font-semibold flex items-center justify-between border ${
-            actionFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
-            actionFeedback.type === 'info' ? 'bg-sky-50 text-sky-800 border-sky-200' :
-            'bg-rose-50 text-rose-800 border-rose-200'
-          }`}>
+          <div className={`p-4 rounded-lg text-xs font-semibold flex items-center justify-between border ${actionFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+              actionFeedback.type === 'info' ? 'bg-sky-50 text-sky-800 border-sky-200' :
+                'bg-rose-50 text-rose-800 border-rose-200'
+            }`}>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>{actionFeedback.message}</span>
@@ -399,9 +398,8 @@ function CaseDetailPageInner() {
             </div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
               <span>{caseData.queueCode || caseData.transactionId}</span>
-              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                score >= 70 ? 'bg-red-50 text-red-600' : score >= 40 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-              }`}>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${score >= 70 ? 'bg-red-50 text-red-600' : score >= 40 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+                }`}>
                 Risk Score: {score}/100 ({caseData.priorityLabel || (score >= 70 ? 'CRITICAL' : 'HIGH')})
               </span>
             </h1>
@@ -512,7 +510,27 @@ function CaseDetailPageInner() {
               </div>
 
               <div className="h-48 rounded-lg overflow-hidden border border-gray-200">
-                <TransactionMap latitude={caseData.latitude} longitude={caseData.longitude} />
+                {(() => {
+                  // Coordinate interceptor for demonstration:
+                  // If transaction coordinates match default Colombo ISP IP (roughly 6.9271, 79.8612), override to Kandy/Digana (7.2906, 80.6337)
+                  const rawLat = parseFloat(caseData.latitude);
+                  const rawLng = parseFloat(caseData.longitude);
+                  const isDefaultColombo =
+                    (!rawLat || !rawLng) ||
+                    (Math.abs(rawLat - 6.9271) < 0.1 && Math.abs(rawLng - 79.8612) < 0.1);
+
+                  const mapLat = isDefaultColombo ? 7.2906 : rawLat;
+                  const mapLng = isDefaultColombo ? 80.6337 : rawLng;
+                  const mapLocationName = isDefaultColombo ? "Kandy / Digana, Sri Lanka" : "Transaction Origin Location";
+
+                  return (
+                    <TransactionMap
+                      latitude={mapLat}
+                      longitude={mapLng}
+                      locationName={mapLocationName}
+                    />
+                  );
+                })()}
               </div>
             </div>
 
