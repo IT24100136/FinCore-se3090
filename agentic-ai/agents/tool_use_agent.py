@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 # Target Endpoint for ASP.NET Core Backend
 NOTIFICATION_API_URL = os.getenv(
     "NOTIFICATION_API_URL",
-    os.getenv("FINCORE_API_URL", "http://localhost:5007/api").rstrip("/") + "/notifications/send"
+    os.getenv("FINCORE_API_URL", "https://fincore-se3090.onrender.com/api").rstrip("/") + "/notifications/send"
 )
 
 
